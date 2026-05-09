@@ -7,7 +7,7 @@ class Member(db.Model):
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(120))
     role = db.Column(db.String(100))
-    tasks = db.relationship('Task', backref='assignee', lazy=True, cascade='all, delete-orphan')
+    tasks = db.relationship('Task', backref='assignee', lazy=True, passive_deletes=True)
     contributions = db.relationship('Contribution', backref='member', lazy=True, cascade='all, delete-orphan')
 
     @property

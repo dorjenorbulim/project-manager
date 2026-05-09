@@ -50,6 +50,8 @@ def add_member():
 @bp.route('/members/<int:id>/delete', methods=['POST'])
 def delete_member(id):
     member = Member.query.get_or_404(id)
+    # Nullify task references before deleting
+    Task.query.filter_by(assignee_id=id).update({'assignee_id': None})
     db.session.delete(member)
     db.session.commit()
     flash(f'Member "{member.name}" removed.')
@@ -104,6 +106,8 @@ def update_milestone_status(id):
 @bp.route('/milestones/<int:id>/delete', methods=['POST'])
 def delete_milestone(id):
     milestone = Milestone.query.get_or_404(id)
+    # Nullify task references before deleting
+    Task.query.filter_by(milestone_id=id).update({'milestone_id': None})
     db.session.delete(milestone)
     db.session.commit()
     flash(f'Milestone "{milestone.name}" deleted.')

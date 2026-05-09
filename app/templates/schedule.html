@@ -67,11 +67,12 @@
                 {{ m.name }}
             </div>
             <div class="gantt-timeline">
-                {% set bar_start = (m.start_date - gantt_start).days if m.start_date else 0 %}
+                {% set raw_start = (m.start_date - gantt_start).days if m.start_date else 0 %}
+                {% set bar_start = [raw_start, 0]|max %}
                 {% set bar_end = (m.deadline - gantt_start).days + 1 %}
-                {% set bar_width = bar_end - bar_start %}
-                {% set left_pct = (bar_start / gantt_days * 100) if gantt_days > 0 else 0 %}
-                {% set width_pct = (bar_width / gantt_days * 100) if gantt_days > 0 else 0 %}
+                {% set bar_width = [(bar_end - bar_start)|int, 1]|max %}
+                {% set left_pct = (bar_start / gantt_days * 100)|round(2) if gantt_days > 0 else 0 %}
+                {% set width_pct = (bar_width / gantt_days * 100)|round(2) if gantt_days > 0 else 2 %}
                 {% if width_pct < 2 %}{% set width_pct = 2 %}{% endif %}
                 <div class="gantt-bar-container">
                     <div class="gantt-bar gantt-bar-{{ m.status }}" style="left:{{ left_pct }}%;width:{{ width_pct }}%;" title="{{ m.name }}: {{ m.start_date.strftime('%b %d') if m.start_date else 'TBD' }} - {{ m.deadline.strftime('%b %d') }} ({{ m.progress }}%)">
