@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Project Manager{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+
+<div class="grid grid-4" style="margin-bottom: 24px;">
+    <div class="card">
+        <div class="card-header">Total Budget</div>
+        <div class="card-value">${{ "%.2f"|format(total_budget) }}</div>
+        <div class="card-sub">{{ "%.0f"|format((total_spent/total_budget*100)) if total_budget else 0 }}% spent</div>
+    </div>
+    <div class="card">
+        <div class="card-header">Spent</div>
+        <div class="card-value">${{ "%.2f"|format(total_spent) }}</div>
+        <div class="card-sub">${{ "%.2f"|format(total_budget - total_spent) }} remaining</div>
+    </div>
+    <div class="card">
+        <div class="card-header">Tasks</div>
+        <div class="card-value">{{ done_tasks }}/{{ total_tasks }}</div>
+        <div class="card-sub">{{ "%.0f"|format((done_tasks/total_tasks*100)) if total_tasks else 0 }}% complete</div>
+    </div>
+    <div class="card">
+        <div class="card-header">Overdue Milestones</div>
+        <div class="card-value" {% if overdue_milestones > 0 %}style="color:#c62828"{% endif %}>{{ overdue_milestones }}</div>
+        <div class="card-sub">{{ milestones|length }} total milestones</div>
+    </div>
+</div>
+
+<h2>Budget Overview</h2>
+<div class="card" style="margin-bottom: 24px;">
+    {% if categories %}
+    <table>
+        <tr><th>Category</th><th>Allocated</th><th>Spent</th><th>Remaining</th><th>Usage</th></tr>
+        {% for cat in categories %}
+        <tr>
+            <td>{{ cat.name }}</td>
+            <td>${{ "%.2f"|format(cat.allocated) }}</td>
+            <td>${{ "%.2f"|format(cat.spent) }}</td>
+            <td {% if cat.remaining < 0 %}style="color:#c62828;font-weight:600"{% endif %}>${{ "%.2f"|format(cat.remaining) }}</td>
+            <td style="width:200px">
+                <div class="budget-bar {% if cat.spent > cat.allocated %}budget-over{% endif %}">
+                    <div class="budget-spent" style="width:{{ [100, (cat.spent/cat.allocated*100)|int if cat.allocated else 0]|min }}%"></div>
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% else %}
+    <p style="color:#86868b">No budget categories yet. <a href="/budget">Add one</a></p>
+    {% endif %}
+</div>
+
+<h2>Milestones</h2>
+<div class="grid grid-2" style="margin-bottom: 24px;">
+    {% for m in milestones[:4] %}
+    <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <strong>{{ m.name }}</strong>
+            <span class="badge badge-{{ m.status }}">{{ m.status }}</span>
+        </div>
+        <div style="font-size:13px;color:#86868b;margin:4px 0;">Deadline: {{ m.deadline.strftime('%b %d, %Y') }}</div>
+        <div class="progress-bar" style="margin-top:8px;">
+            <div class="progress-fill" style="width:{{ m.progress }}%"></div>
+        </div>
+        <div style="font-size:12px;color:#86868b;margin-top:4px;">{{ m.progress }}% complete ({{ m.tasks|selectattr('status','equalto','done')|list|length }}/{{ m.tasks|length }} tasks)</div>
+    </div>
+    {% endfor %}
+    {% if not milestones %}
+    <p style="color:#86868b">No milestones yet. <a href="/schedule">Add one</a></p>
+    {% endif %}
+</div>
+
+<h2>Team Members</h2>
+<div class="grid grid-3">
+    {% for m in members %}
+    <div class="card">
+        <strong>{{ m.name }}</strong>
+        {% if m.role %}<span style="color:#86868b;font-size:13px;margin-left:8px;">{{ m.role }}</span>{% endif %}
+        <div style="font-size:13px;color:#86868b;margin-top:4px;">{{ m.completed_task_count }}/{{ m.task_count }} tasks done</div>
+        <div class="progress-bar" style="margin-top:8px;">
+            <div class="progress-fill" style="width:{{ m.completion_rate }}%;background:{% if m.completion_rate >= 75 %}#4caf50{% elif m.completion_rate >= 40 %}#ff9800{% else %}#f44336{% endif %}"></div>
+        </div>
+    </div>
+    {% endfor %}
+    {% if not members %}
+    <p style="color:#86868b">No members yet. <a href="/members">Add one</a></p>
+    {% endif %}
+</div>
+{% endblock %}

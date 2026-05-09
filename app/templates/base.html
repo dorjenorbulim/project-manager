@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Project Manager{% endblock %}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f7; color: #1d1d1f; }
+        .nav { background: #1d1d1f; padding: 0 24px; display: flex; align-items: center; height: 52px; }
+        .nav a { color: #f5f5f7; text-decoration: none; padding: 14px 16px; font-size: 14px; font-weight: 500; transition: opacity .2s; }
+        .nav a:hover { opacity: .7; }
+        .nav .brand { font-weight: 700; font-size: 16px; margin-right: 24px; }
+        .container { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+        .flash { background: #e8f5e9; border-left: 4px solid #4caf50; padding: 12px 16px; margin-bottom: 16px; border-radius: 4px; font-size: 14px; }
+        h1 { font-size: 28px; font-weight: 700; margin-bottom: 20px; }
+        h2 { font-size: 22px; font-weight: 600; margin: 24px 0 12px; }
+        h3 { font-size: 16px; font-weight: 600; margin: 16px 0 8px; }
+        .grid { display: grid; gap: 16px; }
+        .grid-2 { grid-template-columns: 1fr 1fr; }
+        .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+        .grid-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+        @media (max-width: 768px) { .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; } }
+        .card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+        .card-header { font-size: 14px; color: #86868b; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+        .card-value { font-size: 32px; font-weight: 700; }
+        .card-sub { font-size: 13px; color: #86868b; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 10px 12px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: #86868b; border-bottom: 2px solid #f0f0f0; }
+        td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+        tr:hover { background: #fafafa; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .badge-todo { background: #f0f0f0; color: #555; }
+        .badge-in_progress { background: #e3f2fd; color: #1565c0; }
+        .badge-done { background: #e8f5e9; color: #2e7d32; }
+        .badge-upcoming { background: #f0f0f0; color: #555; }
+        .badge-overdue { background: #ffebee; color: #c62828; }
+        .badge-high { background: #ffebee; color: #c62828; }
+        .badge-medium { background: #fff3e0; color: #e65100; }
+        .badge-low { background: #e8f5e9; color: #2e7d32; }
+        .progress-bar { background: #f0f0f0; border-radius: 8px; height: 8px; overflow: hidden; }
+        .progress-fill { height: 100%; border-radius: 8px; background: #007aff; transition: width .3s; }
+        .btn { display: inline-block; padding: 8px 16px; border-radius: 8px; border: none; font-size: 14px; font-weight: 500; cursor: pointer; text-decoration: none; transition: background .2s; }
+        .btn-primary { background: #007aff; color: #fff; }
+        .btn-primary:hover { background: #0056cc; }
+        .btn-danger { background: #ff3b30; color: #fff; font-size: 12px; padding: 4px 10px; }
+        .btn-danger:hover { background: #cc2f26; }
+        .btn-sm { font-size: 12px; padding: 4px 10px; }
+        form.inline { display: inline; }
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; color: #555; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%; padding: 8px 12px; border: 1px solid #d2d2d7; border-radius: 8px; font-size: 14px;
+        }
+        .form-group textarea { resize: vertical; min-height: 60px; }
+        .add-form { background: #fafafa; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+        .add-form h3 { margin-top: 0; }
+        .actions { display: flex; gap: 6px; align-items: center; }
+        .overdue { color: #c62828; font-weight: 600; }
+        .budget-bar { height: 20px; background: #f0f0f0; border-radius: 4px; overflow: hidden; position: relative; }
+        .budget-spent { height: 100%; background: #007aff; border-radius: 4px; }
+        .budget-over .budget-spent { background: #ff3b30; }
+        .timeline-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+        .dot-done { background: #4caf50; }
+        .dot-in_progress { background: #2196f3; }
+        .dot-upcoming { background: #bdbdbd; }
+        .dot-overdue { background: #f44336; }
+    </style>
+</head>
+<body>
+    <nav class="nav">
+        <a href="/" class="brand">PM</a>
+        <a href="/">Dashboard</a>
+        <a href="/schedule">Schedule</a>
+        <a href="/tasks">Tasks</a>
+        <a href="/budget">Budget</a>
+        <a href="/members">Members</a>
+        <a href="/contributions">Contributions</a>
+    </nav>
+    <div class="container">
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            {% for message in messages %}
+              <div class="flash">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

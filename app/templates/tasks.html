@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Tasks - Project Manager{% endblock %}
+{% block content %}
+<h1>Tasks</h1>
+
+<div class="add-form">
+    <h3>Add Task</h3>
+    <form action="/tasks/add" method="post">
+        <div class="grid grid-2">
+            <div class="form-group">
+                <label>Title *</label>
+                <input type="text" name="title" required>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" name="description">
+            </div>
+        </div>
+        <div class="grid grid-4">
+            <div class="form-group">
+                <label>Priority</label>
+                <select name="priority">
+                    <option value="low">Low</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="high">High</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Milestone</label>
+                <select name="milestone_id">
+                    <option value="">None</option>
+                    {% for m in milestones %}
+                    <option value="{{ m.id }}">{{ m.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Assignee</label>
+                <select name="assignee_id">
+                    <option value="">Unassigned</option>
+                    {% for m in members %}
+                    <option value="{{ m.id }}">{{ m.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Due Date</label>
+                <input type="date" name="due_date">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Add Task</button>
+    </form>
+</div>
+
+<div class="grid grid-3">
+    {% set columns = [('todo', 'To Do'), ('in_progress', 'In Progress'), ('done', 'Done')] %}
+    {% for status, label in columns %}
+    <div>
+        <h3 style="margin-bottom:12px;">{{ label }} ({{ tasks|selectattr('status','equalto',status)|list|length }})</h3>
+        {% for t in tasks if t.status == status %}
+        <div class="card" style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:start;">
+                <strong>{{ t.title }}</strong>
+                <span class="badge badge-{{ t.priority }}">{{ t.priority }}</span>
+            </div>
+            {% if t.description %}<p style="font-size:13px;color:#555;margin:4px 0;">{{ t.description }}</p>{% endif %}
+            <div style="font-size:12px;color:#86868b;margin-top:6px;">
+                {% if t.assignee %}{{ t.assignee.name }}{% endif %}
+                {% if t.due_date %} &middot; {{ t.due_date.strftime('%b %d') }}{% endif %}
+                {% if t.milestone %} &middot; {{ t.milestone.name }}{% endif %}
+            </div>
+            <div class="actions" style="margin-top:8px;">
+                <form class="inline" action="/tasks/{{ t.id }}/status" method="post">
+                    <select name="status" onchange="this.form.submit()" style="padding:2px 6px;border-radius:4px;font-size:12px;">
+                        <option value="todo" {% if t.status=='todo' %}selected{% endif %}>To Do</option>
+                        <option value="in_progress" {% if t.status=='in_progress' %}selected{% endif %}>In Progress</option>
+                        <option value="done" {% if t.status=='done' %}selected{% endif %}>Done</option>
+                    </select>
+                </form>
+                <form class="inline" action="/tasks/{{ t.id }}/delete" method="post" onsubmit="return confirm('Delete task?')">
+                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+        {% if tasks|selectattr('status','equalto',status)|list|length == 0 %}
+        <p style="color:#86868b;font-size:14px;padding:12px;">No tasks</p>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Contributions - Project Manager{% endblock %}
+{% block content %}
+<h1>Contributions</h1>
+
+<div class="add-form">
+    <h3>Log Contribution</h3>
+    <form action="/contributions/add" method="post">
+        <div class="grid grid-4">
+            <div class="form-group">
+                <label>Member *</label>
+                <select name="member_id" required>
+                    {% for m in members %}
+                    <option value="{{ m.id }}">{{ m.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Hours *</label>
+                <input type="number" name="hours" step="0.5" min="0" required>
+            </div>
+            <div class="form-group">
+                <label>Date</label>
+                <input type="date" name="date">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" name="description" placeholder="What was worked on">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Log Hours</button>
+    </form>
+</div>
+
+{% if members %}
+<h2>Hours by Member</h2>
+<div class="card" style="margin-bottom:24px;">
+    <table>
+        <tr><th>Member</th><th>Role</th><th>Total Hours</th><th>Contributions</th><th>Avg Hours/Session</th></tr>
+        {% for m in members %}
+        {% set member_contribs = contributions|selectattr('member_id','equalto',m.id)|list %}
+        {% set total_hours = member_contribs|sum(attribute='hours') %}
+        <tr>
+            <td><strong>{{ m.name }}</strong></td>
+            <td>{{ m.role or '-' }}</td>
+            <td>{{ "%.1f"|format(total_hours) }}h</td>
+            <td>{{ member_contribs|length }}</td>
+            <td>{{ "%.1f"|format(total_hours/member_contribs|length) if member_contribs else 0 }}h</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endif %}
+
+{% if contributions %}
+<h2>Recent Activity</h2>
+<div class="card">
+    <table>
+        <tr><th>Date</th><th>Member</th><th>Hours</th><th>Description</th></tr>
+        {% for c in contributions %}
+        <tr>
+            <td>{{ c.date.strftime('%b %d, %Y') }}</td>
+            <td>{{ c.member.name }}</td>
+            <td>{{ "%.1f"|format(c.hours) }}h</td>
+            <td>{{ c.description or '-' }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% elif not members %}
+<p style="color:#86868b">No members yet. <a href="/members">Add team members</a> first.</p>
+{% else %}
+<p style="color:#86868b">No contributions logged yet.</p>
+{% endif %}
+{% endblock %}

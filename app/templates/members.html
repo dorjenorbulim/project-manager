@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Members - Project Manager{% endblock %}
+{% block content %}
+<h1>Members</h1>
+
+<div class="add-form">
+    <h3>Add Member</h3>
+    <form action="/members/add" method="post">
+        <div class="grid grid-3">
+            <div class="form-group">
+                <label>Name *</label>
+                <input type="text" name="name" required>
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" name="email">
+            </div>
+            <div class="form-group">
+                <label>Role</label>
+                <input type="text" name="role" placeholder="e.g. Developer, Designer">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Add Member</button>
+    </form>
+</div>
+
+{% if members %}
+<table>
+    <tr><th>Name</th><th>Email</th><th>Role</th><th>Tasks</th><th>Completed</th><th>Progress</th><th></th></tr>
+    {% for m in members %}
+    <tr>
+        <td><strong>{{ m.name }}</strong></td>
+        <td>{{ m.email or '-' }}</td>
+        <td>{{ m.role or '-' }}</td>
+        <td>{{ m.task_count }}</td>
+        <td>{{ m.completed_task_count }}</td>
+        <td style="width:150px">
+            <div class="progress-bar">
+                <div class="progress-fill" style="width:{{ m.completion_rate }}%;background:{% if m.completion_rate >= 75 %}#4caf50{% elif m.completion_rate >= 40 %}#ff9800{% else %}#f44336{% endif %}"></div>
+            </div>
+        </td>
+        <td>
+            <form class="inline" action="/members/{{ m.id }}/delete" method="post" onsubmit="return confirm('Remove {{ m.name }}?')">
+                <button type="submit" class="btn btn-danger btn-sm">Remove</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p style="color:#86868b">No members yet. Add one above.</p>
+{% endif %}
+{% endblock %}

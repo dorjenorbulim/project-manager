@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Budget - Project Manager{% endblock %}
+{% block content %}
+<h1>Budget</h1>
+
+<div class="grid grid-3" style="margin-bottom:24px;">
+    <div class="card">
+        <div class="card-header">Total Budget</div>
+        <div class="card-value">${{ "%.2f"|format(total_budget) }}</div>
+    </div>
+    <div class="card">
+        <div class="card-header">Total Spent</div>
+        <div class="card-value">${{ "%.2f"|format(total_spent) }}</div>
+    </div>
+    <div class="card">
+        <div class="card-header">Remaining</div>
+        <div class="card-value" {% if total_budget - total_spent < 0 %}style="color:#c62828"{% endif %}>${{ "%.2f"|format(total_budget - total_spent) }}</div>
+    </div>
+</div>
+
+<div class="add-form">
+    <h3>Add Category</h3>
+    <form action="/budget/categories/add" method="post">
+        <div class="grid grid-2">
+            <div class="form-group">
+                <label>Category Name *</label>
+                <input type="text" name="name" required placeholder="e.g. Software, Hardware, Marketing">
+            </div>
+            <div class="form-group">
+                <label>Budget Allocated ($) *</label>
+                <input type="number" name="allocated" step="0.01" min="0" required>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Add Category</button>
+    </form>
+</div>
+
+{% if categories %}
+{% for cat in categories %}
+<div class="card" style="margin-bottom:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div>
+            <strong style="font-size:16px;">{{ cat.name }}</strong>
+            <form class="inline" action="/budget/categories/{{ cat.id }}/delete" method="post" onsubmit="return confirm('Delete {{ cat.name }} and all its expenses?')">
+                <button type="submit" class="btn btn-danger btn-sm" style="margin-left:8px;">Delete</button>
+            </form>
+        </div>
+        <div style="font-size:14px;color:#86868b;">
+            ${{ "%.2f"|format(cat.spent) }} / ${{ "%.2f"|format(cat.allocated) }}
+        </div>
+    </div>
+
+    <div class="budget-bar {% if cat.spent > cat.allocated %}budget-over{% endif %}" style="margin-bottom:12px;">
+        <div class="budget-spent" style="width:{{ [100, (cat.spent/cat.allocated*100)|int if cat.allocated else 0]|min }}%"></div>
+    </div>
+
+    {% if cat.expenses %}
+    <table>
+        <tr><th>Description</th><th>Amount</th><th>Paid By</th><th>Date</th><th></th></tr>
+        {% for e in cat.expenses %}
+        <tr>
+            <td>{{ e.description }}</td>
+            <td>${{ "%.2f"|format(e.amount) }}</td>
+            <td>{{ e.paid_by or '-' }}</td>
+            <td>{{ e.date.strftime('%b %d, %Y') }}</td>
+            <td>
+                <form class="inline" action="/budget/expenses/{{ e.id }}/delete" method="post" onsubmit="return confirm('Delete expense?')">
+                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% endif %}
+
+    <details style="margin-top:12px;">
+        <summary style="cursor:pointer;font-size:14px;font-weight:500;">Add Expense</summary>
+        <form action="/budget/expenses/add" method="post" style="margin-top:10px;">
+            <input type="hidden" name="category_id" value="{{ cat.id }}">
+            <div class="grid grid-4">
+                <div class="form-group">
+                    <label>Description *</label>
+                    <input type="text" name="description" required>
+                </div>
+                <div class="form-group">
+                    <label>Amount ($) *</label>
+                    <input type="number" name="amount" step="0.01" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label>Paid By</label>
+                    <input type="text" name="paid_by">
+                </div>
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" name="date">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Add Expense</button>
+        </form>
+    </details>
+</div>
+{% endfor %}
+{% else %}
+<p style="color:#86868b">No budget categories yet. Add one above.</p>
+{% endif %}
+{% endblock %}
