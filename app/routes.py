@@ -1,7 +1,8 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from app import db
 from app.models import Member, Milestone, Task, BudgetCategory, Expense, Contribution
 from datetime import datetime, date, timedelta
+import re
 
 bp = Blueprint('main', __name__)
 
@@ -242,3 +243,321 @@ def add_contribution():
     db.session.commit()
     flash('Contribution logged.')
     return redirect(url_for('main.contributions'))
+
+
+# ─── Chatbot API ──────────────────────────────────────────────
+
+def parse_date(text):
+    """Try to parse a date from natural language or YYYY-MM-DD."""
+    text = text.strip().lower()
+    formats = ['%Y-%m-%d', '%m/%d/%Y', '%d-%m-%Y', '%B %d %Y', '%b %d %Y']
+    for fmt in formats:
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    # Relative dates
+    today = date.today()
+    if text in ('today',): return today
+    if text in ('tomorrow',): return today + timedelta(days=1)
+    if text in ('next week',): return today + timedelta(weeks=1)
+    m = re.match(r'(\d+)\s+days?\s+(from\s+now|later|ahead)', text)
+    if m: return today + timedelta(days=int(m.group(1)))
+    return None
+
+
+def smart_allocate(task_name=None):
+    """Suggest who to assign a task to based on current workloads."""
+    members = Member.query.all()
+    if not members:
+        return None, "No team members yet. Add some first!"
+
+    member_loads = []
+    for m in members:
+        total = m.task_count
+        done = m.completed_task_count
+        active = total - done
+        hours = sum(c.hours for c in m.contributions)
+        member_loads.append({'member': m, 'active': active, 'hours': hours, 'score': active * 2 + hours})
+
+    if not task_name:
+        # General allocation overview
+        lines = ["**Team Workload:**\n"]
+        for ml in sorted(member_loads, key=lambda x: x['score']):
+            m = ml['member']
+            lines.append(f"- **{m.name}** ({m.role or 'No role'}): {ml['active']} active tasks, {ml['hours']:.1f}h logged")
+        suggested = min(member_loads, key=lambda x: x['score'])
+        lines.append(f"\nLeast busy: **{suggested['member'].name}** with a workload score of {suggested['score']}")
+        return suggested['member'], '\n'.join(lines)
+
+    # For a specific task, suggest least busy member
+    suggested = min(member_loads, key=lambda x: x['score'])
+    return suggested['member'], f"I'd suggest assigning **{suggested['member'].name}** to \"{task_name}\" — they have the lightest workload ({suggested['active']} active tasks, {suggested['hours']:.1f}h logged)."
+
+
+@bp.route('/api/chat', methods=['POST'])
+def chat():
+    msg = request.json.get('message', '').strip()
+    if not msg:
+        return jsonify({'response': 'Please type a message.'})
+
+    msg_lower = msg.lower()
+
+    # ─── ADD operations ───
+
+    # Add member
+    m = re.match(r'add\s+member\s+(.+?)(?:\s+email\s+(\S+))?(?:\s+role\s+(.+))?$', msg_lower)
+    if m:
+        name = m.group(1).strip().title()
+        email = m.group(2) or ''
+        role = m.group(3) or ''
+        # Check if similar name exists
+        existing = Member.query.filter(Member.name.ilike(f'%{name}%')).first()
+        if existing:
+            return jsonify({'response': f'A member named **{existing.name}** already exists.'})
+        member = Member(name=name, email=email, role=role)
+        db.session.add(member)
+        db.session.commit()
+        return jsonify({'response': f'Added member **{name}**!' + (f' (Role: {role})' if role else '')})
+
+    # Add milestone
+    m = re.match(r'add\s+milestone\s+(.+?)(?:\s+deadline\s+(\S+))?(?:\s+start\s+(\S+))?$', msg_lower)
+    if m:
+        name = m.group(1).strip().title()
+        deadline = parse_date(m.group(2)) if m.group(2) else None
+        start_date = parse_date(m.group(3)) if m.group(3) else None
+        if not deadline:
+            return jsonify({'response': 'Please provide a deadline. Example: `add milestone Sprint 1 deadline 2026-06-30`'})
+        ms = Milestone(name=name, start_date=start_date, deadline=deadline)
+        db.session.add(ms)
+        db.session.commit()
+        return jsonify({'response': f'Added milestone **{name}** (deadline: {deadline.strftime("%b %d, %Y")})!'})
+
+    # Add task
+    m = re.match(r'add\s+task\s+(.+?)(?:\s+priority\s+(\w+))?(?:\s+due\s+(\S+))?$', msg_lower)
+    if m:
+        title = m.group(1).strip().title()
+        priority = m.group(2) or 'medium'
+        due = parse_date(m.group(3)) if m.group(3) else None
+        task = Task(title=title, priority=priority, due_date=due)
+        db.session.add(task)
+        db.session.commit()
+        return jsonify({'response': f'Added task **{title}** (Priority: {priority})!' + (f' Due: {due.strftime("%b %d, %Y")}' if due else '')})
+
+    # Add budget category
+    m = re.match(r'add\s+(?:budget\s+)?category\s+(.+?)\s+\$?([\d.]+)$', msg_lower)
+    if m:
+        name = m.group(1).strip().title()
+        allocated = float(m.group(2))
+        cat = BudgetCategory(name=name, allocated=allocated)
+        db.session.add(cat)
+        db.session.commit()
+        return jsonify({'response': f'Added budget category **{name}** with ${allocated:.2f} allocated!'})
+
+    # Add expense
+    m = re.match(r'add\s+expense\s+(.+?)\s+\$?([\d.]+)(?:\s+(?:for|in)\s+(.+))?$', msg_lower)
+    if m:
+        description = m.group(1).strip().title()
+        amount = float(m.group(2))
+        cat_name = m.group(3).strip().title() if m.group(3) else None
+        cat = None
+        if cat_name:
+            cat = BudgetCategory.query.filter(BudgetCategory.name.ilike(f'%{cat_name}%')).first()
+        if not cat:
+            cats = BudgetCategory.query.all()
+            if not cats:
+                return jsonify({'response': 'No budget categories yet. Add one first: `add category Software $5000`'})
+            cat_list = ', '.join(c.name for c in cats)
+            return jsonify({'response': f'Category not found. Available: {cat_list}'})
+        exp = Expense(description=description, amount=amount, category_id=cat.id, date=date.today())
+        db.session.add(exp)
+        db.session.commit()
+        return jsonify({'response': f'Added expense **{description}** (${amount:.2f}) to **{cat.name}**!'})
+
+    # Log hours
+    m = re.match(r'log\s+(\d+\.?\d*)\s+hours?\s+(?:for\s+)?(.+?)(?:\s+(?:doing|on|for)\s+(.+))?$', msg_lower)
+    if m:
+        hours = float(m.group(1))
+        member_name = m.group(2).strip().title()
+        description = m.group(3).strip() if m.group(3) else ''
+        member = Member.query.filter(Member.name.ilike(f'%{member_name}%')).first()
+        if not member:
+            members = Member.query.all()
+            names = ', '.join(m.name for m in members) if members else 'none'
+            return jsonify({'response': f'Member not found. Available: {names}'})
+        contrib = Contribution(member_id=member.id, hours=hours, description=description, date=date.today())
+        db.session.add(contrib)
+        db.session.commit()
+        return jsonify({'response': f'Logged **{hours}h** for **{member.name}**!' + (f' ({description})' if description else '')})
+
+    # ─── ASSIGN / ALLOCATE ───
+
+    m = re.match(r'assign\s+(?:task\s+)?(.+?)\s+to\s+(.+)$', msg_lower)
+    if m:
+        task_name = m.group(1).strip().title()
+        member_name = m.group(2).strip().title()
+        task = Task.query.filter(Task.title.ilike(f'%{task_name}%')).first()
+        member = Member.query.filter(Member.name.ilike(f'%{member_name}%')).first()
+        if not task:
+            return jsonify({'response': f'Task not found. Check the title and try again.'})
+        if not member:
+            members = Member.query.all()
+            names = ', '.join(m.name for m in members)
+            return jsonify({'response': f'Member not found. Available: {names}'})
+        task.assignee_id = member.id
+        db.session.commit()
+        return jsonify({'response': f'Assigned **{task.title}** to **{member.name}**!'})
+
+    # Suggest allocation for a specific task
+    m = re.match(r'(?:suggest|recommend|allocate)\s+(?:for\s+)?(.+)', msg_lower)
+    if m:
+        task_name = m.group(1).strip().rstrip('?').title()
+        _, suggestion = smart_allocate(task_name)
+        return jsonify({'response': suggestion})
+
+    m = re.match(r'who\s+should\s+(?:I\s+)?(?:assign|give)\s+(?:the\s+)?(?:task\s+)?(.+?)\s*\??$', msg_lower)
+    if m:
+        task_name = m.group(1).strip().rstrip('?').title()
+        _, suggestion = smart_allocate(task_name)
+        return jsonify({'response': suggestion})
+
+    if any(kw in msg_lower for kw in ['suggest', 'recommend', 'allocate', 'who should', 'who is least busy', 'workload']):
+        _, suggestion = smart_allocate()
+        return jsonify({'response': suggestion})
+
+    # ─── LIST operations ───
+
+    if any(kw in msg_lower for kw in ['list tasks', 'show tasks', 'view tasks', 'what tasks']):
+        tasks = Task.query.all()
+        if not tasks:
+            return jsonify({'response': 'No tasks yet. Add one: `add task Build the API priority high due 2026-06-01`'})
+        lines = ['**Tasks:**\n']
+        for t in tasks:
+            assignee = t.assignee.name if t.assignee else 'Unassigned'
+            lines.append(f"- {t.title} | {t.status} | Priority: {t.priority} | Assignee: {assignee}")
+        return jsonify({'response': '\n'.join(lines)})
+
+    if any(kw in msg_lower for kw in ['list members', 'show members', 'view members', 'who are the']):
+        members = Member.query.all()
+        if not members:
+            return jsonify({'response': 'No members yet. Add one: `add member Alice email alice@test.com role Developer`'})
+        lines = ['**Team Members:**\n']
+        for m in members:
+            lines.append(f"- **{m.name}** ({m.role or 'No role'}) — {m.task_count} tasks, {m.completed_task_count} done")
+        return jsonify({'response': '\n'.join(lines)})
+
+    if any(kw in msg_lower for kw in ['list milestone', 'show milestone', 'view milestone', 'schedule']):
+        milestones = Milestone.query.order_by(Milestone.deadline).all()
+        if not milestones:
+            return jsonify({'response': 'No milestones yet. Add one: `add milestone Sprint 1 deadline 2026-06-30`'})
+        lines = ['**Milestones:**\n']
+        for ms in milestones:
+            start = ms.start_date.strftime('%b %d') if ms.start_date else 'TBD'
+            lines.append(f"- **{ms.name}** | {start} - {ms.deadline.strftime('%b %d, %Y')} | Status: {ms.status} | {ms.progress}% complete")
+        return jsonify({'response': '\n'.join(lines)})
+
+    if any(kw in msg_lower for kw in ['list budget', 'show budget', 'view budget', 'budget overview', 'how much']):
+        categories = BudgetCategory.query.all()
+        if not categories:
+            return jsonify({'response': 'No budget categories yet. Add one: `add category Software $5000`'})
+        total_budget = sum(c.allocated for c in categories)
+        total_spent = sum(c.spent for c in categories)
+        lines = [f'**Budget: ${total_budget:.2f} total, ${total_spent:.2f} spent, ${total_budget - total_spent:.2f} remaining**\n']
+        for c in categories:
+            pct = (c.spent / c.allocated * 100) if c.allocated > 0 else 0
+            lines.append(f"- **{c.name}**: ${c.spent:.2f} / ${c.allocated:.2f} ({pct:.0f}%)")
+        return jsonify({'response': '\n'.join(lines)})
+
+    if any(kw in msg_lower for kw in ['list contribution', 'show contribution', 'hours logged', 'who worked']):
+        contribs = Contribution.query.order_by(Contribution.date.desc()).limit(10).all()
+        if not contribs:
+            return jsonify({'response': 'No contributions logged yet. Log hours: `log 5 hours for Alice doing API development`'})
+        lines = ['**Recent Contributions:**\n']
+        for c in contribs:
+            lines.append(f"- **{c.member.name}**: {c.hours:.1f}h — {c.description or 'No description'} ({c.date.strftime('%b %d')})")
+        return jsonify({'response': '\n'.join(lines)})
+
+    # ─── UPDATE operations ───
+
+    m = re.match(r'(?:mark|set|update|change)\s+(?:task\s+)?(.+?)\s+(?:to\s+)?(?:as\s+)?(todo|in.progress|in_progress|done|complete|finished)$', msg_lower)
+    if m:
+        task_name = m.group(1).strip().title()
+        status = m.group(2).replace('in.progress', 'in_progress').replace('complete', 'done').replace('finished', 'done')
+        task = Task.query.filter(Task.title.ilike(f'%{task_name}%')).first()
+        if not task:
+            return jsonify({'response': f'Task not found. Check the title and try again.'})
+        task.status = status
+        db.session.commit()
+        return jsonify({'response': f'Marked **{task.title}** as **{status}**!'})
+
+    m = re.match(r'(?:mark|set|update)\s+milestone\s+(.+?)\s+(?:to\s+)?(?:as\s+)?(upcoming|in.progress|in_progress|done|overdue)$', msg_lower)
+    if m:
+        ms_name = m.group(1).strip().title()
+        status = m.group(2).replace('in.progress', 'in_progress')
+        ms = Milestone.query.filter(Milestone.name.ilike(f'%{ms_name}%')).first()
+        if not ms:
+            return jsonify({'response': f'Milestone not found. Check the name and try again.'})
+        ms.status = status
+        db.session.commit()
+        return jsonify({'response': f'Marked milestone **{ms.name}** as **{status}**!'})
+
+    # ─── DELETE operations ───
+
+    m = re.match(r'delete\s+(?:task|milestone|member|category|expense)\s+(.+)$', msg_lower)
+    if m:
+        name = m.group(1).strip()
+        # Try each model
+        task = Task.query.filter(Task.title.ilike(f'%{name}%')).first()
+        if task:
+            db.session.delete(task)
+            db.session.commit()
+            return jsonify({'response': f'Deleted task **{task.title}**!'})
+        ms = Milestone.query.filter(Milestone.name.ilike(f'%{name}%')).first()
+        if ms:
+            Task.query.filter_by(milestone_id=ms.id).update({'milestone_id': None})
+            db.session.delete(ms)
+            db.session.commit()
+            return jsonify({'response': f'Deleted milestone **{ms.name}**!'})
+        member = Member.query.filter(Member.name.ilike(f'%{name}%')).first()
+        if member:
+            Task.query.filter_by(assignee_id=member.id).update({'assignee_id': None})
+            db.session.delete(member)
+            db.session.commit()
+            return jsonify({'response': f'Deleted member **{member.name}**!'})
+        cat = BudgetCategory.query.filter(BudgetCategory.name.ilike(f'%{name}%')).first()
+        if cat:
+            db.session.delete(cat)
+            db.session.commit()
+            return jsonify({'response': f'Deleted category **{cat.name}**!'})
+        return jsonify({'response': f'Could not find anything named "{name}" to delete.'})
+
+    # ─── HELP ───
+
+    if any(kw in msg_lower for kw in ['help', 'commands', 'what can you do']):
+        return jsonify({'response': """**I can help you manage your project! Here's what I can do:**
+
+**Add:**
+- `add member Alice email alice@test.com role Developer`
+- `add milestone Sprint 1 deadline 2026-06-30 start 2026-05-01`
+- `add task Build API priority high due 2026-06-01`
+- `add category Software $5000`
+- `add expense Hosting $50 for Software`
+- `log 5 hours for Alice doing API work`
+
+**View:**
+- `list tasks` / `list members` / `list milestones` / `list budget` / `list contributions`
+
+**Update:**
+- `mark task Build API as done`
+- `mark milestone Sprint 1 as in progress`
+
+**Assign:**
+- `assign task Build API to Alice`
+- `who should do Build API?` / `suggest`
+
+**Delete:**
+- `delete task Build API` / `delete milestone Sprint 1`
+"""})
+
+    # ─── FALLBACK ───
+    return jsonify({'response': 'I didn\'t understand that. Type **help** to see what I can do!'})
