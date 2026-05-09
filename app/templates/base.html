@@ -65,6 +65,22 @@
         .dot-in_progress { background: #2196f3; }
         .dot-upcoming { background: #bdbdbd; }
         .dot-overdue { background: #f44336; }
+        /* Gantt Chart */
+        .gantt-chart { font-size: 13px; }
+        .gantt-header { display: flex; border-bottom: 2px solid #d2d2d7; padding-bottom: 6px; margin-bottom: 4px; }
+        .gantt-row { display: flex; align-items: center; border-bottom: 1px solid #f0f0f0; }
+        .gantt-row:hover { background: #fafafa; }
+        .gantt-label-col { width: 160px; min-width: 160px; padding: 8px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+        .gantt-timeline { flex: 1; position: relative; }
+        .gantt-month { text-align: center; font-size: 11px; color: #86868b; text-transform: uppercase; letter-spacing: .5px; padding: 4px 0; }
+        .gantt-bar-container { position: relative; height: 28px; }
+        .gantt-bar { position: absolute; top: 2px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; font-weight: 600; cursor: pointer; transition: opacity .2s; min-width: 8px; }
+        .gantt-bar:hover { opacity: .85; }
+        .gantt-bar-upcoming { background: #bdbdbd; }
+        .gantt-bar-in_progress { background: #2196f3; }
+        .gantt-bar-done { background: #4caf50; }
+        .gantt-bar-overdue { background: #f44336; }
+        .gantt-today { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff9800; z-index: 2; }
     </style>
 </head>
 <body>

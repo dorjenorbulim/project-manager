@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from app import db
 from app.models import Member, Milestone, Task, BudgetCategory, Expense, Contribution
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 bp = Blueprint('main', __name__)
 
@@ -61,7 +61,22 @@ def delete_member(id):
 @bp.route('/schedule')
 def schedule():
     milestones = Milestone.query.order_by(Milestone.deadline).all()
-    return render_template('schedule.html', milestones=milestones, today=date.today())
+    today = date.today()
+
+    # Calculate Gantt chart date range
+    all_dates = [m.start_date for m in milestones if m.start_date] + [m.deadline for m in milestones]
+    if all_dates:
+        gantt_start = min(min(all_dates), today)
+        gantt_end = max(all_dates)
+    else:
+        gantt_start = today
+        gantt_end = today
+    # Add a day buffer
+    gantt_end = gantt_end + timedelta(days=1)
+    gantt_days = max((gantt_end - gantt_start).days, 1)
+
+    return render_template('schedule.html', milestones=milestones, today=today,
+        gantt_start=gantt_start, gantt_end=gantt_end, gantt_days=gantt_days)
 
 
 @bp.route('/milestones/add', methods=['POST'])
@@ -69,7 +84,9 @@ def add_milestone():
     name = request.form['name']
     description = request.form.get('description', '')
     deadline = datetime.strptime(request.form['deadline'], '%Y-%m-%d').date()
-    db.session.add(Milestone(name=name, description=description, deadline=deadline))
+    start_date_str = request.form.get('start_date')
+    start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else None
+    db.session.add(Milestone(name=name, description=description, start_date=start_date, deadline=deadline))
     db.session.commit()
     flash(f'Milestone "{name}" created.')
     return redirect(url_for('main.schedule'))

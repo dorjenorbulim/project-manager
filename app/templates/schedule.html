@@ -6,10 +6,14 @@
 <div class="add-form">
     <h3>Add Milestone</h3>
     <form action="/milestones/add" method="post">
-        <div class="grid grid-3">
+        <div class="grid grid-4">
             <div class="form-group">
                 <label>Name *</label>
                 <input type="text" name="name" required>
+            </div>
+            <div class="form-group">
+                <label>Start Date</label>
+                <input type="date" name="start_date">
             </div>
             <div class="form-group">
                 <label>Deadline *</label>
@@ -25,6 +29,75 @@
 </div>
 
 {% if milestones %}
+{# ─── Gantt Chart ─── #}
+<div class="card" style="margin-bottom:24px;overflow-x:auto;">
+    <h3 style="margin:0 0 16px 0;">Gantt Chart</h3>
+    <div class="gantt-chart">
+        <div class="gantt-header">
+            <div class="gantt-label-col">Milestone</div>
+            <div class="gantt-timeline">
+                {# Month headers #}
+                {% set ns = namespace(months=[]) %}
+                {% for m in milestones %}
+                    {% if m.start_date %}
+                        {% set m_start = m.start_date.strftime('%Y-%m') %}
+                        {% if m_start not in ns.months %}
+                            {% set ns.months = (ns.months or []) + [m_start] %}
+                        {% endif %}
+                    {% endif %}
+                    {% set m_end = m.deadline.strftime('%Y-%m') %}
+                    {% if m_end not in ns.months %}
+                        {% set ns.months = (ns.months or []) + [m_end] %}
+                    {% endif %}
+                {% endfor %}
+                {% set sorted_months = ns.months|sort %}
+                {% if sorted_months|length > 0 %}
+                    {% for month in sorted_months %}
+                    <div class="gantt-month" style="flex:1;">{{ month }}</div>
+                    {% endfor %}
+                {% else %}
+                    <div class="gantt-month" style="flex:1;">{{ today.strftime('%Y-%m') }}</div>
+                {% endif %}
+            </div>
+        </div>
+        {% for m in milestones %}
+        <div class="gantt-row">
+            <div class="gantt-label-col">
+                <span class="timeline-dot dot-{{ m.status }}"></span>
+                {{ m.name }}
+            </div>
+            <div class="gantt-timeline">
+                {% set bar_start = (m.start_date - gantt_start).days if m.start_date else 0 %}
+                {% set bar_end = (m.deadline - gantt_start).days + 1 %}
+                {% set bar_width = bar_end - bar_start %}
+                {% set left_pct = (bar_start / gantt_days * 100) if gantt_days > 0 else 0 %}
+                {% set width_pct = (bar_width / gantt_days * 100) if gantt_days > 0 else 0 %}
+                {% if width_pct < 2 %}{% set width_pct = 2 %}{% endif %}
+                <div class="gantt-bar-container">
+                    <div class="gantt-bar gantt-bar-{{ m.status }}" style="left:{{ left_pct }}%;width:{{ width_pct }}%;" title="{{ m.name }}: {{ m.start_date.strftime('%b %d') if m.start_date else 'TBD' }} - {{ m.deadline.strftime('%b %d') }} ({{ m.progress }}%)">
+                        {% if width_pct > 8 %}{{ m.progress }}%{% endif %}
+                    </div>
+                    {# Today marker #}
+                    {% set today_offset = (today - gantt_start).days %}
+                    {% set today_pct = (today_offset / gantt_days * 100) if gantt_days > 0 else 0 %}
+                    {% if today_pct >= 0 and today_pct <= 100 %}
+                    <div class="gantt-today" style="left:{{ today_pct }}%;"></div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div style="display:flex;gap:16px;margin-top:12px;font-size:12px;color:#86868b;">
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#bdbdbd;margin-right:4px;vertical-align:middle;"></span>Upcoming</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#2196f3;margin-right:4px;vertical-align:middle;"></span>In Progress</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#4caf50;margin-right:4px;vertical-align:middle;"></span>Done</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#f44336;margin-right:4px;vertical-align:middle;"></span>Overdue</span>
+        <span><span style="display:inline-block;width:2px;height:10px;background:#ff9800;margin-right:4px;vertical-align:middle;"></span>Today</span>
+    </div>
+</div>
+
+{# ─── Milestone Details ─── #}
 {% for m in milestones %}
 <div class="card" style="margin-bottom:16px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -34,7 +107,7 @@
             <span class="badge badge-{{ m.status }}" style="margin-left:8px;">{{ m.status }}</span>
         </div>
         <div style="font-size:13px;{% if m.deadline < today and m.status != 'done' %}color:#c62828;font-weight:600{% else %}color:#86868b{% endif %}">
-            Deadline: {{ m.deadline.strftime('%b %d, %Y') }}
+            {% if m.start_date %}{{ m.start_date.strftime('%b %d') }} - {% endif %}{{ m.deadline.strftime('%b %d, %Y') }}
         </div>
     </div>
 
@@ -49,12 +122,13 @@
 
     {% if m.tasks %}
     <table>
-        <tr><th>Task</th><th>Assignee</th><th>Priority</th><th>Status</th></tr>
+        <tr><th>Task</th><th>Assignee</th><th>Priority</th><th>Due</th><th>Status</th></tr>
         {% for t in m.tasks %}
         <tr>
             <td>{{ t.title }}</td>
             <td>{{ t.assignee.name if t.assignee else '-' }}</td>
             <td><span class="badge badge-{{ t.priority }}">{{ t.priority }}</span></td>
+            <td style="font-size:13px;">{{ t.due_date.strftime('%b %d') if t.due_date else '-' }}</td>
             <td><span class="badge badge-{{ t.status }}">{{ t.status }}</span></td>
         </tr>
         {% endfor %}

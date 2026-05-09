@@ -30,6 +30,7 @@ class Milestone(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)
+    start_date = db.Column(db.Date)
     deadline = db.Column(db.Date, nullable=False)
     status = db.Column(db.String(20), default='upcoming')  # upcoming, in_progress, done, overdue
     tasks = db.relationship('Task', backref='milestone', lazy=True, passive_deletes=True)
