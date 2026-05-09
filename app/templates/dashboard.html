@@ -7,7 +7,11 @@
     <div class="card">
         <div class="card-header">Total Budget</div>
         <div class="card-value">${{ "%.2f"|format(total_budget) }}</div>
-        <div class="card-sub">{{ "%.0f"|format((total_spent/total_budget*100)) if total_budget else 0 }}% spent</div>
+        {% if total_budget > 0 %}
+        <div class="card-sub">{{ "%.0f"|format(total_spent / total_budget * 100) }}% spent</div>
+        {% else %}
+        <div class="card-sub">0% spent</div>
+        {% endif %}
     </div>
     <div class="card">
         <div class="card-header">Spent</div>
@@ -17,7 +21,11 @@
     <div class="card">
         <div class="card-header">Tasks</div>
         <div class="card-value">{{ done_tasks }}/{{ total_tasks }}</div>
-        <div class="card-sub">{{ "%.0f"|format((done_tasks/total_tasks*100)) if total_tasks else 0 }}% complete</div>
+        {% if total_tasks > 0 %}
+        <div class="card-sub">{{ "%.0f"|format(done_tasks / total_tasks * 100) }}% complete</div>
+        {% else %}
+        <div class="card-sub">0% complete</div>
+        {% endif %}
     </div>
     <div class="card">
         <div class="card-header">Overdue Milestones</div>
@@ -39,7 +47,9 @@
             <td {% if cat.remaining < 0 %}style="color:#c62828;font-weight:600"{% endif %}>${{ "%.2f"|format(cat.remaining) }}</td>
             <td style="width:200px">
                 <div class="budget-bar {% if cat.spent > cat.allocated %}budget-over{% endif %}">
-                    <div class="budget-spent" style="width:{{ [100, (cat.spent/cat.allocated*100)|int if cat.allocated else 0]|min }}%"></div>
+                    {% set pct = (cat.spent / cat.allocated * 100)|int if cat.allocated > 0 else 0 %}
+                    {% if pct > 100 %}{% set pct = 100 %}{% endif %}
+                    <div class="budget-spent" style="width:{{ pct }}%"></div>
                 </div>
             </td>
         </tr>
@@ -62,7 +72,8 @@
         <div class="progress-bar" style="margin-top:8px;">
             <div class="progress-fill" style="width:{{ m.progress }}%"></div>
         </div>
-        <div style="font-size:12px;color:#86868b;margin-top:4px;">{{ m.progress }}% complete ({{ m.tasks|selectattr('status','equalto','done')|list|length }}/{{ m.tasks|length }} tasks)</div>
+        {% set done_tasks = m.tasks|selectattr('status','equalto','done')|list|length %}
+        <div style="font-size:12px;color:#86868b;margin-top:4px;">{{ m.progress }}% complete ({{ done_tasks }}/{{ m.tasks|length }} tasks)</div>
     </div>
     {% endfor %}
     {% if not milestones %}
@@ -78,7 +89,13 @@
         {% if m.role %}<span style="color:#86868b;font-size:13px;margin-left:8px;">{{ m.role }}</span>{% endif %}
         <div style="font-size:13px;color:#86868b;margin-top:4px;">{{ m.completed_task_count }}/{{ m.task_count }} tasks done</div>
         <div class="progress-bar" style="margin-top:8px;">
-            <div class="progress-fill" style="width:{{ m.completion_rate }}%;background:{% if m.completion_rate >= 75 %}#4caf50{% elif m.completion_rate >= 40 %}#ff9800{% else %}#f44336{% endif %}"></div>
+            {% if m.completion_rate >= 75 %}
+            <div class="progress-fill" style="width:{{ m.completion_rate }}%;background:#4caf50"></div>
+            {% elif m.completion_rate >= 40 %}
+            <div class="progress-fill" style="width:{{ m.completion_rate }}%;background:#ff9800"></div>
+            {% else %}
+            <div class="progress-fill" style="width:{{ m.completion_rate }}%;background:#f44336"></div>
+            {% endif %}
         </div>
     </div>
     {% endfor %}

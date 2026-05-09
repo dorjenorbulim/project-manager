@@ -145,7 +145,10 @@ def delete_task(id):
 @bp.route('/budget')
 def budget():
     categories = BudgetCategory.query.all()
-    return render_template('budget.html', categories=categories)
+    total_budget = sum(c.allocated for c in categories)
+    total_spent = sum(c.spent for c in categories)
+    return render_template('budget.html', categories=categories,
+        total_budget=total_budget, total_spent=total_spent)
 
 
 @bp.route('/budget/categories/add', methods=['POST'])

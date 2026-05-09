@@ -5,6 +5,7 @@
 
 <div class="add-form">
     <h3>Log Contribution</h3>
+    {% if members %}
     <form action="/contributions/add" method="post">
         <div class="grid grid-4">
             <div class="form-group">
@@ -30,6 +31,9 @@
         </div>
         <button type="submit" class="btn btn-primary">Log Hours</button>
     </form>
+    {% else %}
+    <p style="color:#86868b">Add <a href="/members">team members</a> first to log contributions.</p>
+    {% endif %}
 </div>
 
 {% if members %}
@@ -40,12 +44,13 @@
         {% for m in members %}
         {% set member_contribs = contributions|selectattr('member_id','equalto',m.id)|list %}
         {% set total_hours = member_contribs|sum(attribute='hours') %}
+        {% set contrib_count = member_contribs|length %}
         <tr>
             <td><strong>{{ m.name }}</strong></td>
             <td>{{ m.role or '-' }}</td>
             <td>{{ "%.1f"|format(total_hours) }}h</td>
-            <td>{{ member_contribs|length }}</td>
-            <td>{{ "%.1f"|format(total_hours/member_contribs|length) if member_contribs else 0 }}h</td>
+            <td>{{ contrib_count }}</td>
+            <td>{% if contrib_count > 0 %}{{ "%.1f"|format(total_hours / contrib_count) }}h{% else %}0h{% endif %}</td>
         </tr>
         {% endfor %}
     </table>
@@ -68,7 +73,6 @@
     </table>
 </div>
 {% elif not members %}
-<p style="color:#86868b">No members yet. <a href="/members">Add team members</a> first.</p>
 {% else %}
 <p style="color:#86868b">No contributions logged yet.</p>
 {% endif %}

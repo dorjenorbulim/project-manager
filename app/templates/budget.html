@@ -50,8 +50,10 @@
         </div>
     </div>
 
+    {% set pct = (cat.spent / cat.allocated * 100)|int if cat.allocated > 0 else 0 %}
+    {% if pct > 100 %}{% set pct = 100 %}{% endif %}
     <div class="budget-bar {% if cat.spent > cat.allocated %}budget-over{% endif %}" style="margin-bottom:12px;">
-        <div class="budget-spent" style="width:{{ [100, (cat.spent/cat.allocated*100)|int if cat.allocated else 0]|min }}%"></div>
+        <div class="budget-spent" style="width:{{ pct }}%"></div>
     </div>
 
     {% if cat.expenses %}
