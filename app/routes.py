@@ -407,31 +407,26 @@ def chat():
 
     # ─── ADD operations ───
 
-    # Add member — flexible: "add member Alice", "add Alice as Developer", "create member Bob role Designer"
-    m = re.match(r'(?:add|create|new)\s+(?:member\s+)?(.+?)(?:\s+(?:email\s+|as\s+|role\s+)(.+))?$', msg_lower)
-    if m and ('member' in msg_lower or msg_lower.startswith(('add ', 'create ', 'new '))):
-        name = m.group(1).strip()
+    # Add member — requires "member" keyword: "add member Alice", "add member Alice role Developer"
+    m = re.match(r'(?:add|create|new)\s+member\s+(.+?)(?:\s+(?:email\s+|as\s+|role\s+)(.+))?$', msg_lower)
+    if m:
+        name = m.group(1).strip().title()
         extra = m.group(2) or ''
         email = ''
         role = ''
-        # Parse email/role from extra
         email_match = re.search(r'(\S+@\S+)', extra)
         if email_match:
             email = email_match.group(1)
             extra = extra.replace(email, '').strip()
         if extra:
             role = extra.strip()
-        # If name doesn't already have "member" stripped, it's fine — but check for "task" etc
-        if name.startswith('task') or name.startswith('milestone') or name.startswith('category') or name.startswith('expense'):
-            pass  # Fall through to other handlers
-        else:
-            existing = Member.query.filter(Member.name.ilike(f'%{name}%')).first()
-            if existing:
-                return jsonify({'response': f'A member named **{existing.name}** already exists.'})
-            member = Member(name=name.title(), email=email, role=role)
-            db.session.add(member)
-            db.session.commit()
-            return jsonify({'response': f'Added member **{name.title()}**!' + (f' (Role: {role})' if role else '')})
+        existing = Member.query.filter(Member.name.ilike(f'%{name}%')).first()
+        if existing:
+            return jsonify({'response': f'A member named **{existing.name}** already exists.'})
+        member = Member(name=name, email=email, role=role)
+        db.session.add(member)
+        db.session.commit()
+        return jsonify({'response': f'Added member **{name}**!' + (f' (Role: {role})' if role else '')})
 
     # Add milestone
     m = re.match(r'(?:add|create|new)\s+milestone\s+(.+?)(?:\s+deadline\s+(\S+))?(?:\s+start\s+(\S+))?$', msg_lower)
@@ -467,10 +462,12 @@ def chat():
         db.session.commit()
         return jsonify({'response': f'Added budget category **{name}** with ${allocated:.2f} allocated!'})
 
-    # Add expense
-    m = re.match(r'(?:add|create|new)\s+expense\s+(.+?)\s+\$?([\d.]+)(?:\s+(?:for|in)\s+(.+))?$', msg_lower)
+    # Add expense — supports "expense", "spending", "cost"
+    # Format: add expense <description> $<amount> [for <category>]
+    # Or: add spending $<amount> [for <category>]
+    m = re.match(r'(?:add|create|new|log)\s+(?:expense|spending|cost)\s+(?:(.+?)\s+)?\$?([\d.]+)(?:\s+(?:for|in|to)\s+(.+))?$', msg_lower)
     if m:
-        description = m.group(1).strip().title()
+        description = (m.group(1) or 'Expense').strip().title()
         amount = float(m.group(2))
         cat_name = m.group(3).strip().title() if m.group(3) else None
         cat = None
@@ -487,8 +484,8 @@ def chat():
         db.session.commit()
         return jsonify({'response': f'Added expense **{description}** (${amount:.2f}) to **{cat.name}**!'})
 
-    # Log hours — flexible: "log 5 hours for Alice", "5 hours Alice doing API"
-    m = re.match(r'(?:log\s+)?(\d+\.?\d*)\s+hours?\s+(?:for\s+)?(.+?)(?:\s+(?:doing|on|for|working\s+on)\s+(.+))?$', msg_lower)
+    # Log hours — flexible: "log 5 hours for Alice", "track 5 hours Alice doing API"
+    m = re.match(r'(?:log|track|record)\s+(\d+\.?\d*)\s+hours?\s+(?:for\s+)?(.+?)(?:\s+(?:doing|on|for|working\s+on)\s+(.+))?$', msg_lower)
     if m:
         hours = float(m.group(1))
         member_name = m.group(2).strip().title()
@@ -560,7 +557,7 @@ def chat():
             lines.append(f"- **{ms.name}** | {start} - {ms.deadline.strftime('%b %d, %Y')} | Status: {ms.status} | {ms.progress}% complete")
         return jsonify({'response': '\n'.join(lines)})
 
-    if any(kw in msg_lower for kw in ['list budget', 'show budget', 'view budget', 'budget overview', 'how much', 'budget?', 'spending', 'expenses']):
+    if any(kw in msg_lower for kw in ['list budget', 'show budget', 'view budget', 'budget overview', 'how much', 'budget?', 'expenses']):
         categories = BudgetCategory.query.all()
         if not categories:
             return jsonify({'response': 'No budget categories yet. Add one: `add category Software $5000`'})
