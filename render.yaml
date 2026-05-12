@@ -1,17 +1,18 @@
-databases:
-  - name: project-db
-    databaseName: project_db
-    plan: free
-
 services:
   - type: web
     name: project-manager
     runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn wsgi:application
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
     envVars:
       - key: SECRET_KEY
         generateValue: true
+      - key: RENDER_DATA_DIR
+        value: /data
       - key: PYTHON_VERSION
         value: "3.11.0"
     plan: free
