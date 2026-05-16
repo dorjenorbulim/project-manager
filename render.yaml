@@ -15,10 +15,4 @@ services:
         value: /data
       - key: PYTHON_VERSION
         value: "3.11.0"
-      - key: AI_API_BASE
-        value: ""
-      - key: AI_API_KEY
-        value: "not-needed"
-      - key: AI_MODEL
-        value: "qwen2.5"
     plan: free
