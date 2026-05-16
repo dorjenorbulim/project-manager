@@ -53,6 +53,7 @@ def set_runtime_api_base(url):
 
 def is_ai_configured():
     """Check if AI is available via runtime override, env vars, or QVAC server."""
+    _load_runtime_api_base()
     if _runtime_api_base:
         return True
     if os.environ.get('AI_API_BASE'):
