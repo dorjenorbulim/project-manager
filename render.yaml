@@ -16,9 +16,9 @@ services:
       - key: PYTHON_VERSION
         value: "3.11.0"
       - key: AI_API_BASE
-        sync: false
+        value: ""
       - key: AI_API_KEY
-        sync: false
+        value: "not-needed"
       - key: AI_MODEL
-        sync: false
+        value: "qwen2.5"
     plan: free
