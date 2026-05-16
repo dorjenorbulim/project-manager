@@ -629,4 +629,7 @@ def ai_status():
     """Return current AI/QVAC status for the chat widget."""
     status = get_qvac_status()
     status['start_command'] = start_qvac_server()
+    # Debug: show all AI_* env vars
+    import os as _os
+    status['debug_env'] = {k: v for k, v in _os.environ.items() if k.startswith('AI_') or k == 'SECRET_KEY'}
     return jsonify(status)
