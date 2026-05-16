@@ -334,8 +334,10 @@ def chat():
 
             return jsonify({'response': final_reply, 'ai_powered': True})
         except Exception as e:
-            # Fall back to regex parser on AI errors
-            pass
+            # Fall back to regex parser on AI errors, but include error info
+            import logging
+            logging.getLogger(__name__).error('AI chat error: %s', e)
+            return jsonify({'response': f'AI error: {str(e)}', 'ai_powered': True})
 
     # ─── Regex parser fallback ───
     msg_lower = msg.lower().strip().rstrip('.')
