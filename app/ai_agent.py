@@ -209,12 +209,19 @@ def chat_with_ai(user_message, conversation_history=None):
     messages.append({"role": "user", "content": user_message})
 
     try:
-        response = client.chat.completions.create(
+        # Use streaming to avoid timeout issues with tunnel connections
+        stream = client.chat.completions.create(
             model=model,
             messages=messages,
             max_tokens=1024,
             temperature=0.7,
+            stream=True,
         )
+        reply = ""
+        for chunk in stream:
+            content = chunk.choices[0].delta.content if chunk.choices[0].delta else None
+            if content:
+                reply += content
     except Exception as e:
         logger.error("AI chat error: %s", e)
         return f"AI error: {str(e)}", []
