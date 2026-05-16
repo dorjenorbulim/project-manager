@@ -14,7 +14,7 @@ QVAC_DEFAULT_MODEL = "qwen2.5"
 
 
 def is_ai_configured():
-    """Check if the QVAC server is running."""
+    """Check if AI is available via env vars or QVAC server."""
     if os.environ.get('AI_API_BASE'):
         return True
     return is_qvac_server_running()
@@ -56,11 +56,14 @@ def get_qvac_status():
         'model': None,
         'base_url': None,
         'type': None,
+        'env_base': os.environ.get('AI_API_BASE', ''),
+        'env_model': os.environ.get('AI_MODEL', ''),
     }
 
     # Check env vars
     if os.environ.get('AI_API_BASE'):
         status['configured'] = True
+        status['server_running'] = True  # Assume reachable; will fail gracefully on chat
         status['base_url'] = os.environ.get('AI_API_BASE')
         status['model'] = os.environ.get('AI_MODEL', 'unknown')
         status['type'] = 'env'
