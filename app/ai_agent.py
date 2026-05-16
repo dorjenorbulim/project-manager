@@ -12,14 +12,42 @@ QVAC_PORT = 11435
 QVAC_BASE_URL = f"http://localhost:{QVAC_PORT}/v1"
 QVAC_DEFAULT_MODEL = "qwen2.5"
 
-# Runtime override for AI_API_BASE (updated via /api/ai/configure)
+# Runtime override for AI_API_BASE (persisted to file so all gunicorn workers see it)
 _runtime_api_base = None
+_RUNTIME_CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'runtime_ai_base.txt')
+
+
+def _load_runtime_api_base():
+    """Load runtime override from file."""
+    global _runtime_api_base
+    try:
+        if os.path.exists(_RUNTIME_CONFIG_FILE):
+            with open(_RUNTIME_CONFIG_FILE, 'r') as f:
+                val = f.read().strip()
+                if val:
+                    _runtime_api_base = val
+    except Exception:
+        pass
+
+
+def _save_runtime_api_base(url):
+    """Save runtime override to file so all workers pick it up."""
+    try:
+        with open(_RUNTIME_CONFIG_FILE, 'w') as f:
+            f.write(url or '')
+    except Exception:
+        pass
+
+
+# Load on module import
+_load_runtime_api_base()
 
 
 def set_runtime_api_base(url):
-    """Set the AI API base URL at runtime (used by tunnel auto-updater)."""
+    """Set the AI API base URL at runtime (persisted to file for multi-worker)."""
     global _runtime_api_base
     _runtime_api_base = url
+    _save_runtime_api_base(url)
     logger.info("Runtime AI_API_BASE set to: %s", url)
 
 
@@ -42,7 +70,10 @@ def is_qvac_server_running():
 
 
 def get_ai_config():
-    """Get AI configuration — checks runtime override, then env vars, then QVAC."""
+    """Get AI configuration — checks file override, then env vars, then QVAC."""
+    # Reload from file in case another worker updated it
+    _load_runtime_api_base()
+
     base_url = _runtime_api_base
     api_key = os.environ.get('AI_API_KEY', 'not-needed')
     model = os.environ.get('AI_MODEL')
