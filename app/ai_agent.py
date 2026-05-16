@@ -14,7 +14,10 @@ QVAC_DEFAULT_MODEL = "qwen2.5"
 
 # Runtime override for AI_API_BASE (persisted to file so all gunicorn workers see it)
 _runtime_api_base = None
-_RUNTIME_CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'runtime_ai_base.txt')
+_RUNTIME_CONFIG_FILE = os.path.join(
+    os.environ.get('RENDER_DATA_DIR', os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    'runtime_ai_base.txt'
+)
 
 
 def _load_runtime_api_base():
