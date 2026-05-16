@@ -12,9 +12,21 @@ QVAC_PORT = 11435
 QVAC_BASE_URL = f"http://localhost:{QVAC_PORT}/v1"
 QVAC_DEFAULT_MODEL = "qwen2.5"
 
+# Runtime override for AI_API_BASE (updated via /api/ai/configure)
+_runtime_api_base = None
+
+
+def set_runtime_api_base(url):
+    """Set the AI API base URL at runtime (used by tunnel auto-updater)."""
+    global _runtime_api_base
+    _runtime_api_base = url
+    logger.info("Runtime AI_API_BASE set to: %s", url)
+
 
 def is_ai_configured():
-    """Check if AI is available via env vars or QVAC server."""
+    """Check if AI is available via runtime override, env vars, or QVAC server."""
+    if _runtime_api_base:
+        return True
     if os.environ.get('AI_API_BASE'):
         return True
     return is_qvac_server_running()
@@ -30,10 +42,13 @@ def is_qvac_server_running():
 
 
 def get_ai_config():
-    """Get AI configuration — QVAC only, no Ollama."""
-    base_url = os.environ.get('AI_API_BASE')
+    """Get AI configuration — checks runtime override, then env vars, then QVAC."""
+    base_url = _runtime_api_base
     api_key = os.environ.get('AI_API_KEY', 'not-needed')
     model = os.environ.get('AI_MODEL')
+
+    if not base_url:
+        base_url = os.environ.get('AI_API_BASE')
 
     if not base_url:
         if is_qvac_server_running():
@@ -60,8 +75,16 @@ def get_qvac_status():
         'env_model': os.environ.get('AI_MODEL', ''),
     }
 
+    # Check runtime override first
+    if _runtime_api_base:
+        status['configured'] = True
+        status['server_running'] = True
+        status['base_url'] = _runtime_api_base
+        status['model'] = os.environ.get('AI_MODEL', QVAC_DEFAULT_MODEL)
+        status['type'] = 'tunnel'
+
     # Check env vars
-    if os.environ.get('AI_API_BASE'):
+    if not status['configured'] and os.environ.get('AI_API_BASE'):
         status['configured'] = True
         status['server_running'] = True  # Assume reachable; will fail gracefully on chat
         status['base_url'] = os.environ.get('AI_API_BASE')
