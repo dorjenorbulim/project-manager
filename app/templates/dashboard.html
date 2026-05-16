@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block body_attrs %}class="page-dashboard"{% endblock %}
 {% block title %}Dashboard - Project Manager{% endblock %}
 {% block content %}
 <h1>Dashboard</h1>
@@ -34,51 +35,84 @@
     </div>
 </div>
 
-<h2>Budget Overview</h2>
-<div class="card" style="margin-bottom: 24px;">
-    {% if categories %}
-    <table>
-        <tr><th>Category</th><th>Allocated</th><th>Spent</th><th>Remaining</th><th>Usage</th></tr>
-        {% for cat in categories %}
-        <tr>
-            <td>{{ cat.name }}</td>
-            <td>${{ "%.2f"|format(cat.allocated) }}</td>
-            <td>${{ "%.2f"|format(cat.spent) }}</td>
-            <td {% if cat.remaining < 0 %}style="color:#c62828;font-weight:600"{% endif %}>${{ "%.2f"|format(cat.remaining) }}</td>
-            <td style="width:200px">
-                <div class="budget-bar {% if cat.spent > cat.allocated %}budget-over{% endif %}">
-                    {% set pct = (cat.spent / cat.allocated * 100)|int if cat.allocated > 0 else 0 %}
-                    {% if pct > 100 %}{% set pct = 100 %}{% endif %}
-                    <div class="budget-spent" style="width:{{ pct }}%"></div>
-                </div>
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
-    {% else %}
-    <p style="color:#86868b">No budget categories yet. <a href="/budget">Add one</a></p>
-    {% endif %}
+<!-- AI Assistant Panel -->
+<div class="card ai-panel" style="margin-bottom: 24px; padding: 0; overflow: hidden;">
+    <div class="ai-panel-header">
+        <div style="display:flex;align-items:center;gap:10px;">
+            <span class="ai-icon">&#9889;</span>
+            <span>AI Project Assistant</span>
+            <span class="ai-badge
+                {% if ai_status.configured and ai_status.server_running %}ai-badge-online
+                {% elif ai_status.configured %}ai-badge-offline
+                {% else %}ai-badge-basic{% endif %}">
+                {% if ai_status.configured and ai_status.server_running %}{{ ai_status.model }} &middot; Online
+                {% elif ai_status.configured %}Offline
+                {% else %}Basic Mode{% endif %}
+            </span>
+        </div>
+        <button class="ai-reset-btn" id="aiResetBtn" title="Reset conversation">Reset</button>
+    </div>
+    <div class="ai-panel-body">
+        <div class="ai-messages" id="aiMessages">
+            <div class="ai-msg ai-msg-bot">
+                <span>Hi! I'm your AI project assistant. I can help you manage tasks, members, budget, and more. Try asking me anything, or type <strong>help</strong> for commands.</span>
+            </div>
+        </div>
+        <div class="ai-input-row">
+            <input type="text" id="aiInput" placeholder="Ask me anything about your project..." autocomplete="off">
+            <button id="aiSend">&#10148;</button>
+        </div>
+    </div>
 </div>
 
-<h2>Milestones</h2>
-<div class="grid grid-2" style="margin-bottom: 24px;">
-    {% for m in milestones[:4] %}
-    <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-            <strong>{{ m.name }}</strong>
-            <span class="badge badge-{{ m.status }}">{{ m.status }}</span>
+<div class="grid grid-2" style="margin-bottom: 24px; gap: 24px;">
+    <div>
+        <h2>Budget Overview</h2>
+        <div class="card">
+            {% if categories %}
+            <table>
+                <tr><th>Category</th><th>Allocated</th><th>Spent</th><th>Remaining</th><th>Usage</th></tr>
+                {% for cat in categories %}
+                <tr>
+                    <td>{{ cat.name }}</td>
+                    <td>${{ "%.2f"|format(cat.allocated) }}</td>
+                    <td>${{ "%.2f"|format(cat.spent) }}</td>
+                    <td {% if cat.remaining < 0 %}style="color:#c62828;font-weight:600"{% endif %}>${{ "%.2f"|format(cat.remaining) }}</td>
+                    <td style="width:120px">
+                        <div class="budget-bar {% if cat.spent > cat.allocated %}budget-over{% endif %}">
+                            {% set pct = (cat.spent / cat.allocated * 100)|int if cat.allocated > 0 else 0 %}
+                            {% if pct > 100 %}{% set pct = 100 %}{% endif %}
+                            <div class="budget-spent" style="width:{{ pct }}%"></div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+            {% else %}
+            <p style="color:#86868b">No budget categories yet. <a href="/budget">Add one</a></p>
+            {% endif %}
         </div>
-        <div style="font-size:13px;color:#86868b;margin:4px 0;">Deadline: {{ m.deadline.strftime('%b %d, %Y') }}</div>
-        <div class="progress-bar" style="margin-top:8px;">
-            <div class="progress-fill" style="width:{{ m.progress }}%"></div>
-        </div>
-        {% set done_tasks = m.tasks|selectattr('status','equalto','done')|list|length %}
-        <div style="font-size:12px;color:#86868b;margin-top:4px;">{{ m.progress }}% complete ({{ done_tasks }}/{{ m.tasks|length }} tasks)</div>
     </div>
-    {% endfor %}
-    {% if not milestones %}
-    <p style="color:#86868b">No milestones yet. <a href="/schedule">Add one</a></p>
-    {% endif %}
+    <div>
+        <h2>Milestones</h2>
+        {% for m in milestones[:4] %}
+        <div class="card" style="margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <strong>{{ m.name }}</strong>
+                <span class="badge badge-{{ m.status }}">{{ m.status }}</span>
+            </div>
+            <div style="font-size:13px;color:#86868b;margin:4px 0;">Deadline: {{ m.deadline.strftime('%b %d, %Y') }}</div>
+            <div class="progress-bar" style="margin-top:8px;">
+                <div class="progress-fill" style="width:{{ m.progress }}%"></div>
+            </div>
+            {% set done_tasks = m.tasks|selectattr('status','equalto','done')|list|length %}
+            <div style="font-size:12px;color:#86868b;margin-top:4px;">{{ m.progress }}% complete ({{ done_tasks }}/{{ m.tasks|length }} tasks)</div>
+        </div>
+        {% endfor %}
+        {% if not milestones %}
+        <div class="card"><p style="color:#86868b">No milestones yet. <a href="/schedule">Add one</a></p></div>
+        {% endif %}
+    </div>
 </div>
 
 <h2>Team Members</h2>
@@ -103,4 +137,60 @@
     <p style="color:#86868b">No members yet. <a href="/members">Add one</a></p>
     {% endif %}
 </div>
+
+<script>
+(function() {
+    const input = document.getElementById('aiInput');
+    const send = document.getElementById('aiSend');
+    const msgContainer = document.getElementById('aiMessages');
+    const resetBtn = document.getElementById('aiResetBtn');
+
+    function addMsg(text, type) {
+        const div = document.createElement('div');
+        div.className = 'ai-msg ai-msg-' + type;
+        const span = document.createElement('span');
+        span.innerHTML = text.replace(/\n/g, '<br>');
+        div.appendChild(span);
+        msgContainer.appendChild(div);
+        msgContainer.scrollTop = msgContainer.scrollHeight;
+    }
+
+    async function sendMsg() {
+        const text = input.value.trim();
+        if (!text) return;
+        addMsg(text, 'user');
+        input.value = '';
+
+        const typing = document.createElement('div');
+        typing.className = 'ai-msg ai-msg-typing';
+        typing.innerHTML = '<span>Thinking...</span>';
+        msgContainer.appendChild(typing);
+        msgContainer.scrollTop = msgContainer.scrollHeight;
+
+        try {
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: text })
+            });
+            const data = await res.json();
+            typing.remove();
+            addMsg(data.response, 'bot');
+        } catch (e) {
+            typing.remove();
+            addMsg('Sorry, something went wrong. Please try again.', 'bot');
+        }
+    }
+
+    async function resetChat() {
+        await fetch('/api/chat/reset', { method: 'POST' });
+        msgContainer.innerHTML = '<div class="ai-msg ai-msg-bot"><span>Conversation reset! How can I help with your project?</span></div>';
+    }
+
+    send.addEventListener('click', sendMsg);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMsg(); });
+    resetBtn.addEventListener('click', resetChat);
+    input.focus();
+})();
+</script>
 {% endblock %}

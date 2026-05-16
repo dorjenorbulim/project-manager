@@ -15,4 +15,10 @@ services:
         value: /data
       - key: PYTHON_VERSION
         value: "3.11.0"
+      - key: AI_API_BASE
+        sync: false
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_MODEL
+        sync: false
     plan: free

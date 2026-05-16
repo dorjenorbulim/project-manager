@@ -1,7 +1,8 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
 from app import db
 from app.models import Member, Milestone, Task, BudgetCategory, Expense, Contribution
 from datetime import datetime, date, timedelta
+from app.ai_agent import is_ai_configured, chat_with_ai, execute_action, get_qvac_status, start_qvac_server
 import re
 
 bp = Blueprint('main', __name__)
@@ -22,11 +23,14 @@ def dashboard():
     done_tasks = len([t for t in tasks if t.status == 'done'])
     overdue_milestones = len([m for m in milestones if m.deadline < date.today() and m.status != 'done'])
 
+    ai_status = get_qvac_status()
+
     return render_template('dashboard.html',
         members=members, milestones=milestones, categories=categories,
         total_budget=total_budget, total_spent=total_spent,
         total_tasks=total_tasks, done_tasks=done_tasks,
-        overdue_milestones=overdue_milestones)
+        overdue_milestones=overdue_milestones,
+        ai_status=ai_status)
 
 
 # ─── Members ─────────────────────────────────────────────────
@@ -301,7 +305,39 @@ def chat():
     if not msg:
         return jsonify({'response': 'Please type a message.'})
 
-    # Preserve original for display, work with lowercase
+    # ─── AI Agent path (when configured) ───
+    if is_ai_configured():
+        try:
+            # Maintain conversation history in session
+            if 'chat_history' not in session:
+                session['chat_history'] = []
+
+            # Add user message to history
+            session['chat_history'].append({'role': 'user', 'content': msg})
+
+            ai_reply, actions = chat_with_ai(msg, session['chat_history'])
+
+            # Execute any actions the AI requested
+            action_results = []
+            for action in actions:
+                result = execute_action(action)
+                action_results.append(result)
+
+            # Build final response
+            final_reply = ai_reply
+            if action_results:
+                final_reply += '\n\n' + '\n'.join(action_results)
+
+            # Add assistant reply to history
+            session['chat_history'].append({'role': 'assistant', 'content': final_reply})
+            session.modified = True
+
+            return jsonify({'response': final_reply, 'ai_powered': True})
+        except Exception as e:
+            # Fall back to regex parser on AI errors
+            pass
+
+    # ─── Regex parser fallback ───
     msg_lower = msg.lower().strip().rstrip('.')
 
     # ─── HELP ───
@@ -580,3 +616,17 @@ def chat():
 
     # ─── FALLBACK ───
     return jsonify({'response': 'I didn\'t quite understand that. Try **help** to see what I can do, or use commands like:\n- `show tasks`\n- `add member Alice role Developer`\n- `remove Bob`\n- `mark Build API as done`'})
+
+
+@bp.route('/api/chat/reset', methods=['POST'])
+def chat_reset():
+    session.pop('chat_history', None)
+    return jsonify({'response': 'Conversation reset!'})
+
+
+@bp.route('/api/ai/status', methods=['GET'])
+def ai_status():
+    """Return current AI/QVAC status for the chat widget."""
+    status = get_qvac_status()
+    status['start_command'] = start_qvac_server()
+    return jsonify(status)

@@ -1,0 +1,18 @@
+{
+  "serve": {
+    "models": {
+      "qwen2.5": {
+        "src": "/Users/subhuti/.qvac/models/2d46483dcbde0652_Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+        "type": "llamacpp-completion",
+        "default": true,
+        "preload": true,
+        "config": {
+          "ctx_size": 4096,
+          "temp": 0.7,
+          "top_p": 0.9,
+          "gpu_layers": 0
+        }
+      }
+    }
+  }
+}
