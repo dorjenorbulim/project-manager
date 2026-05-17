@@ -152,7 +152,9 @@ def chat_with_ai(user_message, conversation_history=None):
     ]
 
     if conversation_history:
-        messages.extend(conversation_history[-10:])
+        # Filter out entries with None content (some models return None)
+        valid = [m for m in conversation_history[-10:] if m.get('content')]
+        messages.extend(valid)
 
     messages.append({"role": "user", "content": user_message})
 
@@ -170,7 +172,9 @@ def chat_with_ai(user_message, conversation_history=None):
             temperature=0.7,
             extra_headers=extra_headers or None,
         )
-        reply = response.choices[0].message.content
+        reply = response.choices[0].message.content or ''
+        if not reply.strip():
+            return "AI returned an empty response. Please try again.", []
     except Exception as e:
         logger.error("AI chat error: %s", e)
         return f"AI error: {str(e)}", []
