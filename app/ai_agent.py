@@ -2,154 +2,37 @@ import os
 import json
 import re
 import logging
-import requests
 from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
-# QVAC settings — QVAC standalone always runs on port 11435
-QVAC_PORT = 11435
-QVAC_BASE_URL = f"http://localhost:{QVAC_PORT}/v1"
-QVAC_DEFAULT_MODEL = "qwen2.5"
-
-# Runtime override for AI_API_BASE (persisted to file so all gunicorn workers see it)
-_runtime_api_base = None
-_RUNTIME_CONFIG_FILE = os.path.join(
-    os.environ.get('RENDER_DATA_DIR', os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    'runtime_ai_base.txt'
-)
-
-
-def _load_runtime_api_base():
-    """Load runtime override from file."""
-    global _runtime_api_base
-    try:
-        if os.path.exists(_RUNTIME_CONFIG_FILE):
-            with open(_RUNTIME_CONFIG_FILE, 'r') as f:
-                val = f.read().strip()
-                if val:
-                    _runtime_api_base = val
-    except Exception:
-        pass
-
-
-def _save_runtime_api_base(url):
-    """Save runtime override to file so all workers pick it up."""
-    try:
-        with open(_RUNTIME_CONFIG_FILE, 'w') as f:
-            f.write(url or '')
-    except Exception:
-        pass
-
-
-# Load on module import
-_load_runtime_api_base()
-
-
-def set_runtime_api_base(url):
-    """Set the AI API base URL at runtime (persisted to file for multi-worker)."""
-    global _runtime_api_base
-    _runtime_api_base = url
-    _save_runtime_api_base(url)
-    logger.info("Runtime AI_API_BASE set to: %s", url)
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
+OPENAI_MODEL = os.environ.get('OPENAI_MODEL', 'gpt-4o-mini')
 
 
 def is_ai_configured():
-    """Check if AI is available via runtime override, env vars, or QVAC server."""
-    _load_runtime_api_base()
-    if _runtime_api_base:
-        return True
-    if os.environ.get('AI_API_BASE'):
-        return True
-    return is_qvac_server_running()
-
-
-def is_qvac_server_running():
-    """Check if QVAC OpenAI-compatible server is running on its dedicated port."""
-    try:
-        resp = requests.get(f"http://localhost:{QVAC_PORT}/v1/models", timeout=2)
-        return resp.status_code == 200
-    except Exception:
-        return False
+    """Check if OpenAI API key is available."""
+    return bool(OPENAI_API_KEY)
 
 
 def get_ai_config():
-    """Get AI configuration — checks file override, then env vars, then QVAC."""
-    # Reload from file in case another worker updated it
-    _load_runtime_api_base()
-
-    base_url = _runtime_api_base
-    api_key = os.environ.get('AI_API_KEY', 'not-needed')
-    model = os.environ.get('AI_MODEL')
-
-    if not base_url:
-        base_url = os.environ.get('AI_API_BASE')
-
-    if not base_url:
-        if is_qvac_server_running():
-            base_url = QVAC_BASE_URL
-            if not model:
-                model = QVAC_DEFAULT_MODEL
-            logger.info("QVAC server detected at %s, model=%s", base_url, model)
-
-    if not model:
-        model = QVAC_DEFAULT_MODEL
-
-    return base_url, api_key, model
+    """Get AI configuration from environment variables."""
+    return OPENAI_API_KEY, OPENAI_MODEL
 
 
-def get_qvac_status():
-    """Get QVAC server status for the UI."""
-    status = {
-        'configured': False,
-        'server_running': False,
-        'model': None,
-        'base_url': None,
-        'type': None,
-        'env_base': os.environ.get('AI_API_BASE', ''),
-        'env_model': os.environ.get('AI_MODEL', ''),
+def get_ai_status():
+    """Get AI status for the UI."""
+    configured = bool(OPENAI_API_KEY)
+    return {
+        'configured': configured,
+        'model': OPENAI_MODEL if configured else None,
+        'type': 'openai' if configured else None,
     }
 
-    # Check runtime override first
-    if _runtime_api_base:
-        status['configured'] = True
-        status['server_running'] = True
-        status['base_url'] = _runtime_api_base
-        status['model'] = os.environ.get('AI_MODEL', QVAC_DEFAULT_MODEL)
-        status['type'] = 'tunnel'
 
-    # Check env vars
-    if not status['configured'] and os.environ.get('AI_API_BASE'):
-        status['configured'] = True
-        status['server_running'] = True  # Assume reachable; will fail gracefully on chat
-        status['base_url'] = os.environ.get('AI_API_BASE')
-        status['model'] = os.environ.get('AI_MODEL', 'unknown')
-        status['type'] = 'env'
-
-    # Check QVAC server on dedicated port
-    try:
-        resp = requests.get(f"http://localhost:{QVAC_PORT}/v1/models", timeout=2)
-        if resp.status_code == 200:
-            status['server_running'] = True
-            if not status['configured']:
-                status['configured'] = True
-                status['base_url'] = QVAC_BASE_URL
-                status['model'] = os.environ.get('AI_MODEL', QVAC_DEFAULT_MODEL)
-                status['type'] = 'qvac'
-            data = resp.json()
-            loaded = data.get('data', [])
-            if loaded:
-                status['loaded_models'] = [m.get('id', 'unknown') for m in loaded]
-    except Exception:
-        pass
-
-    return status
-
-
-def start_qvac_server():
-    """Return the command to start QVAC server (for reference in UI)."""
-    config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'qvac.config.json')
-    return f"npx qvac serve openai --config {config_path} --model qwen2.5 --cors --port {QVAC_PORT}"
+def _start_server_placeholder():
+    """No longer needed — kept for route compatibility."""
+    return None
 
 
 def get_project_context():
@@ -201,7 +84,7 @@ def get_project_context():
     return ctx
 
 
-SYSTEM_PROMPT = """You are a project management assistant powered by QVAC (local AI). You help manage a school project by:
+SYSTEM_PROMPT = """You are a project management assistant. You help manage a school project by:
 - Viewing and understanding the current project state
 - Adding tasks, milestones, members, budget categories, and expenses
 - Assigning tasks to team members
@@ -244,13 +127,13 @@ Keep responses concise and practical.
 
 
 def chat_with_ai(user_message, conversation_history=None):
-    """Send message to AI and return (text_response, actions_list)."""
-    base_url, api_key, model = get_ai_config()
+    """Send message to OpenAI and return (text_response, actions_list)."""
+    api_key, model = get_ai_config()
 
-    if not base_url:
-        return "AI is not configured. Start the QVAC server or set AI_API_BASE environment variable.", []
+    if not api_key:
+        return "AI is not configured. Set the OPENAI_API_KEY environment variable.", []
 
-    client = OpenAI(base_url=base_url, api_key=api_key)
+    client = OpenAI(api_key=api_key)
 
     # Build context
     project_data = get_project_context()
@@ -267,19 +150,13 @@ def chat_with_ai(user_message, conversation_history=None):
     messages.append({"role": "user", "content": user_message})
 
     try:
-        # Use streaming to avoid timeout issues with tunnel connections
-        stream = client.chat.completions.create(
+        response = client.chat.completions.create(
             model=model,
             messages=messages,
             max_tokens=1024,
             temperature=0.7,
-            stream=True,
         )
-        reply = ""
-        for chunk in stream:
-            content = chunk.choices[0].delta.content if chunk.choices[0].delta else None
-            if content:
-                reply += content
+        reply = response.choices[0].message.content
     except Exception as e:
         logger.error("AI chat error: %s", e)
         return f"AI error: {str(e)}", []

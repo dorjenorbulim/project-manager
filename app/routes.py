@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from app import db
 from app.models import Member, Milestone, Task, BudgetCategory, Expense, Contribution
 from datetime import datetime, date, timedelta
-from app.ai_agent import is_ai_configured, chat_with_ai, execute_action, get_qvac_status, start_qvac_server, set_runtime_api_base
+from app.ai_agent import is_ai_configured, chat_with_ai, execute_action, get_ai_status
 import re
 
 bp = Blueprint('main', __name__)
@@ -23,7 +23,7 @@ def dashboard():
     done_tasks = len([t for t in tasks if t.status == 'done'])
     overdue_milestones = len([m for m in milestones if m.deadline < date.today() and m.status != 'done'])
 
-    ai_status = get_qvac_status()
+    ai_status = get_ai_status()
 
     return render_template('dashboard.html',
         members=members, milestones=milestones, categories=categories,
@@ -628,23 +628,11 @@ def chat_reset():
 
 @bp.route('/api/ai/status', methods=['GET'])
 def ai_status():
-    """Return current AI/QVAC status for the chat widget."""
-    status = get_qvac_status()
-    status['start_command'] = start_qvac_server()
-    return jsonify(status)
+    """Return current AI status for the chat widget."""
+    return jsonify(get_ai_status())
 
 
 @bp.route('/api/ai/configure', methods=['POST'])
 def ai_configure():
-    """Update the AI API base URL at runtime (no redeploy needed).
-    Used by the tunnel auto-updater when the tunnel URL changes.
-    Expects JSON: {"api_base": "https://...loca.lt/v1"} or {"api_base": ""} to clear.
-    """
-    data = request.get_json(silent=True) or {}
-    api_base = data.get('api_base', '').strip()
-    if api_base:
-        set_runtime_api_base(api_base)
-        return jsonify({'status': 'ok', 'api_base': api_base})
-    else:
-        set_runtime_api_base(None)
-        return jsonify({'status': 'cleared'})
+    """AI configuration is now via OPENAI_API_KEY env var only."""
+    return jsonify({'status': 'ok', 'message': 'Set OPENAI_API_KEY env var to configure AI.'})

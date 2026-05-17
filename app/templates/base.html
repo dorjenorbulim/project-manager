@@ -106,7 +106,6 @@
         .ai-icon { font-size: 20px; }
         .ai-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
         .ai-badge-online { background: #4caf50; color: #fff; }
-        .ai-badge-offline { background: #ff9800; color: #fff; }
         .ai-badge-basic { background: #757575; color: #fff; }
         .ai-reset-btn { background: rgba(255,255,255,.15); color: #fff; border: 1px solid rgba(255,255,255,.3); border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer; transition: background .2s; }
         .ai-reset-btn:hover { background: rgba(255,255,255,.25); }
@@ -177,15 +176,11 @@
         toggle.addEventListener('click', () => { win.classList.toggle('open'); if(win.classList.contains('open')) input.focus(); });
         close.addEventListener('click', () => { win.classList.remove('open'); });
 
-        // Check AI/QVAC status
+        // Check AI status
         fetch('/api/ai/status').then(r => r.json()).then(status => {
-            if (status.configured && status.server_running) {
-                statusBadge.textContent = 'QVAC AI';
+            if (status.configured) {
+                statusBadge.textContent = status.model || 'OpenAI';
                 statusBadge.style.background = '#4caf50';
-                statusBadge.style.color = '#fff';
-            } else if (status.configured) {
-                statusBadge.textContent = 'AI (offline)';
-                statusBadge.style.background = '#ff9800';
                 statusBadge.style.color = '#fff';
             } else {
                 statusBadge.textContent = 'Basic';

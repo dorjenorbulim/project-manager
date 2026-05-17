@@ -42,11 +42,9 @@
             <span class="ai-icon">&#9889;</span>
             <span>AI Project Assistant</span>
             <span class="ai-badge
-                {% if ai_status.configured and ai_status.server_running %}ai-badge-online
-                {% elif ai_status.configured %}ai-badge-offline
+                {% if ai_status.configured %}ai-badge-online
                 {% else %}ai-badge-basic{% endif %}">
-                {% if ai_status.configured and ai_status.server_running %}{{ ai_status.model }} &middot; Online
-                {% elif ai_status.configured %}Offline
+                {% if ai_status.configured %}{{ ai_status.model }} &middot; Online
                 {% else %}Basic Mode{% endif %}
             </span>
         </div>
