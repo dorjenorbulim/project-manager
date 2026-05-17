@@ -68,13 +68,34 @@ start_qvac() {
     return 1
 }
 
+start_tunnel() {
+    echo -e "${GREEN}Starting Cloudflare tunnel to port 11435...${NC}"
+    cloudflared tunnel --url http://localhost:11435 &>"$SCRIPT_DIR/tunnel_url.txt" &
+    TUNNEL_PID=$!
+    echo -e "${GREEN}Cloudflare tunnel starting (PID: $TUNNEL_PID)${NC}"
+    echo -n "Waiting for tunnel URL..."
+    for i in $(seq 1 15); do
+        TUNNEL_URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' "$SCRIPT_DIR/tunnel_url.txt" 2>/dev/null | head -1)
+        if [ -n "$TUNNEL_URL" ]; then
+            echo -e "\n${GREEN}Tunnel URL: $TUNNEL_URL${NC}"
+            # Notify the Render app
+            curl -s -X POST "https://project-manager-vqcr.onrender.com/api/ai/configure" \
+                -H "Content-Type: application/json" \
+                -d "{\"api_base\": \"${TUNNEL_URL}/v1\"}" 2>/dev/null && echo "  Render notified."
+            return 0
+        fi
+        sleep 1
+    done
+    echo -e "\n${RED}Tunnel did not start.${NC}"
+    return 1
+}
+
 start_flask() {
     echo -e "${GREEN}Starting Flask project manager...${NC}"
     source "$SCRIPT_DIR/venv/bin/activate" 2>/dev/null || true
-    # Use QVAC server on port 11435
-    export AI_API_BASE="http://localhost:11435/v1"
-    export AI_MODEL="qwen2.5"
     export AI_API_KEY="not-needed"
+    export AI_MODEL="qwen2.5"
+    # AI_API_BASE will be set dynamically via /api/ai/configure by the tunnel
     python "$SCRIPT_DIR/run.py" &
     FLASK_PID=$!
     echo -e "${GREEN}Flask server starting (PID: $FLASK_PID) on http://localhost:5000${NC}"
@@ -91,20 +112,27 @@ case "${1:-}" in
         echo -e "${YELLOW}QVAC server running. Press Ctrl+C to stop.${NC}"
         wait $QVAC_PID
         ;;
+    --tunnel-only)
+        start_tunnel
+        echo -e "${YELLOW}Cloudflare tunnel running. Press Ctrl+C to stop.${NC}"
+        wait $TUNNEL_PID
+        ;;
     --web-only)
         start_flask
         echo -e "${YELLOW}Flask server running. Press Ctrl+C to stop.${NC}"
         wait $FLASK_PID
         ;;
     *)
-        # Default: start both
+        # Default: start QVAC + tunnel + Flask
         start_qvac
+        start_tunnel
         start_flask
         echo ""
         echo -e "${GREEN}========================================${NC}"
         echo -e "${GREEN}  Project Manager is running!${NC}"
         echo -e "${GREEN}  Web:   http://localhost:5000${NC}"
         echo -e "${GREEN}  QVAC:  http://localhost:11435/v1${NC}"
+        echo -e "${GREEN}  Tunnel: see tunnel_url.txt${NC}"
         echo -e "${GREEN}========================================${NC}"
         echo -e "${YELLOW}Press Ctrl+C to stop all servers.${NC}"
         wait
