@@ -20,5 +20,5 @@ services:
       - key: AI_BASE_URL
         value: https://openrouter.ai/api/v1
       - key: AI_MODEL
-        value: meta-llama/llama-4-scout:free
+        value: openrouter/free
     plan: free

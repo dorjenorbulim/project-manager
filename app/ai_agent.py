@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 #   AI_BASE_URL   — OpenAI-compatible endpoint (default: https://openrouter.ai/api/v1)
 AI_API_KEY = os.environ.get('AI_API_KEY', '')
 AI_BASE_URL = os.environ.get('AI_BASE_URL', 'https://openrouter.ai/api/v1')
-AI_MODEL = os.environ.get('AI_MODEL', 'meta-llama/llama-4-scout:free')
+AI_MODEL = os.environ.get('AI_MODEL', 'openrouter/free')
 
 
 def is_ai_configured():
