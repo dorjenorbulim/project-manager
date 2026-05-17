@@ -284,8 +284,6 @@ def chat_with_ai(user_message, conversation_history=None):
         logger.error("AI chat error: %s", e)
         return f"AI error: {str(e)}", []
 
-    reply = response.choices[0].message.content
-
     # Extract actions from reply
     actions = []
     action_blocks = re.findall(r'<<<ACTION>>>(.+?)<<<END_ACTION>>>', reply, re.DOTALL)
