@@ -179,7 +179,7 @@
         // Check AI status
         fetch('/api/ai/status').then(r => r.json()).then(status => {
             if (status.configured) {
-                statusBadge.textContent = status.model || 'OpenAI';
+                statusBadge.textContent = (status.provider || 'AI') + ' · ' + (status.model || '');
                 statusBadge.style.background = '#4caf50';
                 statusBadge.style.color = '#fff';
             } else {

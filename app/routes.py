@@ -634,5 +634,5 @@ def ai_status():
 
 @bp.route('/api/ai/configure', methods=['POST'])
 def ai_configure():
-    """AI configuration is now via OPENAI_API_KEY env var only."""
-    return jsonify({'status': 'ok', 'message': 'Set OPENAI_API_KEY env var to configure AI.'})
+    """AI configuration is via environment variables only."""
+    return jsonify({'status': 'ok', 'message': 'Set AI_API_KEY, AI_BASE_URL, and AI_MODEL env vars to configure AI.'})

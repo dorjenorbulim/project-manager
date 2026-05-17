@@ -6,27 +6,34 @@ from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
-OPENAI_MODEL = os.environ.get('OPENAI_MODEL', 'gpt-4o-mini')
+# Configuration via environment variables:
+#   AI_API_KEY    — required, your API key
+#   AI_MODEL      — model name (default: meta-llama/llama-4-scout:free)
+#   AI_BASE_URL   — OpenAI-compatible endpoint (default: https://openrouter.ai/api/v1)
+AI_API_KEY = os.environ.get('AI_API_KEY', '')
+AI_BASE_URL = os.environ.get('AI_BASE_URL', 'https://openrouter.ai/api/v1')
+AI_MODEL = os.environ.get('AI_MODEL', 'meta-llama/llama-4-scout:free')
 
 
 def is_ai_configured():
-    """Check if OpenAI API key is available."""
-    return bool(OPENAI_API_KEY)
+    """Check if AI API key is available."""
+    return bool(AI_API_KEY)
 
 
 def get_ai_config():
     """Get AI configuration from environment variables."""
-    return OPENAI_API_KEY, OPENAI_MODEL
+    return AI_API_KEY, AI_BASE_URL, AI_MODEL
 
 
 def get_ai_status():
     """Get AI status for the UI."""
-    configured = bool(OPENAI_API_KEY)
+    configured = bool(AI_API_KEY)
+    provider = 'OpenRouter' if 'openrouter' in AI_BASE_URL else ('OpenAI' if 'api.openai' in AI_BASE_URL else 'Custom')
     return {
         'configured': configured,
-        'model': OPENAI_MODEL if configured else None,
-        'type': 'openai' if configured else None,
+        'model': AI_MODEL if configured else None,
+        'type': provider.lower() if configured else None,
+        'provider': provider,
     }
 
 
@@ -127,13 +134,13 @@ Keep responses concise and practical.
 
 
 def chat_with_ai(user_message, conversation_history=None):
-    """Send message to OpenAI and return (text_response, actions_list)."""
-    api_key, model = get_ai_config()
+    """Send message to AI and return (text_response, actions_list)."""
+    api_key, base_url, model = get_ai_config()
 
     if not api_key:
-        return "AI is not configured. Set the OPENAI_API_KEY environment variable.", []
+        return "AI is not configured. Set the AI_API_KEY environment variable.", []
 
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key, base_url=base_url)
 
     # Build context
     project_data = get_project_context()
@@ -150,11 +157,18 @@ def chat_with_ai(user_message, conversation_history=None):
     messages.append({"role": "user", "content": user_message})
 
     try:
+        extra_headers = {}
+        if 'openrouter' in base_url:
+            extra_headers = {
+                'HTTP-Referer': 'https://project-manager-vqcr.onrender.com',
+                'X-Title': 'Project Manager',
+            }
         response = client.chat.completions.create(
             model=model,
             messages=messages,
             max_tokens=1024,
             temperature=0.7,
+            extra_headers=extra_headers or None,
         )
         reply = response.choices[0].message.content
     except Exception as e:

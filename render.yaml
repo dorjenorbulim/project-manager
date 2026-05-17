@@ -15,8 +15,10 @@ services:
         value: /data
       - key: PYTHON_VERSION
         value: "3.11.0"
-      - key: OPENAI_API_KEY
+      - key: AI_API_KEY
         sync: false
-      - key: OPENAI_MODEL
-        value: gpt-4o-mini
+      - key: AI_BASE_URL
+        value: https://openrouter.ai/api/v1
+      - key: AI_MODEL
+        value: meta-llama/llama-4-scout:free
     plan: free

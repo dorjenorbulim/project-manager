@@ -44,7 +44,7 @@
             <span class="ai-badge
                 {% if ai_status.configured %}ai-badge-online
                 {% else %}ai-badge-basic{% endif %}">
-                {% if ai_status.configured %}{{ ai_status.model }} &middot; Online
+                {% if ai_status.configured %}{{ ai_status.model }} &middot; {{ ai_status.provider }} Online
                 {% else %}Basic Mode{% endif %}
             </span>
         </div>
