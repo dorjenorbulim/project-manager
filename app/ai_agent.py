@@ -43,33 +43,71 @@ def _start_server_placeholder():
 
 
 def get_project_context():
-    """Build a snapshot of current project data for AI context."""
+    """Build a snapshot of current project data for AI context, including role-based workload analysis."""
     from app.models import Member, Milestone, Task, BudgetCategory, Contribution
     from datetime import date
 
     ctx = {}
 
     members = Member.query.all()
-    ctx['members'] = [{
-        'name': m.name, 'role': m.role or 'N/A',
-        'tasks_total': m.task_count, 'tasks_done': m.completed_task_count,
-        'hours_logged': sum(c.hours for c in m.contributions)
-    } for m in members]
+    member_data = []
+    for m in members:
+        active_tasks = [t for t in m.tasks if t.status != 'done']
+        completed_tasks = [t for t in m.tasks if t.status == 'done']
+        hours = sum(c.hours for c in m.contributions)
+        member_data.append({
+            'name': m.name,
+            'role': m.role or 'No role',
+            'email': m.email or '',
+            'tasks_total': m.task_count,
+            'tasks_done': m.completed_task_count,
+            'tasks_active': len(active_tasks),
+            'hours_logged': hours,
+            'active_task_titles': [t.title for t in active_tasks],
+            'overdue_tasks': [t.title for t in active_tasks if t.due_date and t.due_date < date.today()],
+            'workload_score': len(active_tasks) * 2 + hours,
+        })
+    ctx['members'] = member_data
+
+    # Role-based workload summary
+    role_summary = {}
+    for md in member_data:
+        role = md['role']
+        if role not in role_summary:
+            role_summary[role] = {'members': [], 'total_active': 0, 'total_hours': 0}
+        role_summary[role]['members'].append(md['name'])
+        role_summary[role]['total_active'] += md['tasks_active']
+        role_summary[role]['total_hours'] += md['hours_logged']
+    ctx['role_summary'] = role_summary
+
+    # Least busy members per role
+    least_busy = {}
+    for role, info in role_summary.items():
+        role_members = [m for m in member_data if m['role'] == role]
+        if role_members:
+            least_busy[role] = min(role_members, key=lambda x: x['workload_score'])['name']
+    ctx['least_busy_by_role'] = least_busy
 
     milestones = Milestone.query.order_by(Milestone.deadline).all()
     ctx['milestones'] = [{
-        'name': m.name, 'status': m.status, 'progress': m.progress,
+        'name': m.name, 'description': m.description or '', 'status': m.status, 'progress': m.progress,
         'start': m.start_date.isoformat() if m.start_date else None,
         'deadline': m.deadline.isoformat(),
-        'tasks': [{'title': t.title, 'status': t.status, 'assignee': t.assignee.name if t.assignee else None} for t in m.tasks]
+        'is_overdue': m.deadline < date.today() and m.status != 'done',
+        'tasks': [{'title': t.title, 'status': t.status, 'priority': t.priority,
+                   'assignee': t.assignee.name if t.assignee else None,
+                   'assignee_role': t.assignee.role if t.assignee else None,
+                   'due': t.due_date.isoformat() if t.due_date else None} for t in m.tasks]
     } for m in milestones]
 
     tasks = Task.query.all()
     ctx['tasks'] = [{
-        'title': t.title, 'status': t.status, 'priority': t.priority,
+        'title': t.title, 'description': t.description or '', 'status': t.status, 'priority': t.priority,
         'assignee': t.assignee.name if t.assignee else None,
+        'assignee_role': t.assignee.role if t.assignee else 'Unassigned',
         'milestone': t.milestone.name if t.milestone else None,
-        'due': t.due_date.isoformat() if t.due_date else None
+        'due': t.due_date.isoformat() if t.due_date else None,
+        'is_overdue': t.due_date < date.today() if t.due_date and t.status != 'done' else False,
     } for t in tasks]
 
     categories = BudgetCategory.query.all()
@@ -78,55 +116,92 @@ def get_project_context():
         'total_spent': sum(c.spent for c in categories),
         'categories': [{
             'name': c.name, 'allocated': c.allocated, 'spent': c.spent,
+            'remaining': c.remaining,
+            'usage_pct': round(c.spent / c.allocated * 100) if c.allocated > 0 else 0,
             'expenses': [{'desc': e.description, 'amount': e.amount, 'paid_by': e.paid_by} for e in c.expenses]
         } for c in categories]
     }
 
     contribs = Contribution.query.order_by(Contribution.date.desc()).limit(10).all()
     ctx['recent_contributions'] = [{
-        'member': c.member.name, 'hours': c.hours, 'description': c.description, 'date': c.date.isoformat()
+        'member': c.member.name, 'role': c.member.role or 'No role',
+        'hours': c.hours, 'description': c.description, 'date': c.date.isoformat()
     } for c in contribs]
 
     ctx['today'] = date.today().isoformat()
+
+    # Proactive insights
+    insights = []
+    overdue_tasks = [t for t in tasks if t.due_date and t.due_date < date.today() and t.status != 'done']
+    if overdue_tasks:
+        insights.append(f"{len(overdue_tasks)} overdue task(s): {', '.join(t.title for t in overdue_tasks[:5])}")
+    unassigned = [t for t in tasks if t.assignee is None and t.status != 'done']
+    if unassigned:
+        insights.append(f"{len(unassigned)} unassigned task(s): {', '.join(t.title for t in unassigned[:5])}")
+    overloaded = [m for m in member_data if m['tasks_active'] >= 5]
+    if overloaded:
+        insights.append(f"Overloaded member(s): {', '.join(m['name'] for m in overloaded)}")
+    ctx['insights'] = insights
+
     return ctx
 
 
-SYSTEM_PROMPT = """You are a project management assistant. You help manage a school project by:
-- Viewing and understanding the current project state
-- Adding tasks, milestones, members, budget categories, and expenses
-- Assigning tasks to team members
-- Suggesting who should work on what based on workload
-- Logging contribution hours
-- Updating task/milestone statuses
-- Removing/deleting items
+SYSTEM_PROMPT = """You are a smart project management assistant with FULL CONTROL over the dashboard. You proactively manage the project by assigning tasks to the right team members based on their roles and workload, tracking progress, and keeping things organized.
 
-When the user asks you to do something, respond naturally and confirm what you did.
-If you need to perform an action (add, remove, update, assign, log), output an action block like:
+ROLE-BASED ASSIGNMENT RULES:
+- Always consider a member's ROLE when assigning tasks. For example:
+  - A "Risk Manager" should handle risk assessment and mitigation tasks
+  - A "Developer" should handle coding and technical tasks
+  - A "Designer" should handle UI/UX and visual tasks
+  - A "QA Lead" should handle testing and quality assurance tasks
+- When a task matches a member's role, assign it to them even if they have a slightly higher workload
+- When no role match exists, assign to the member with the lowest workload
+- Always explain your assignment reasoning: mention WHY that person is the best fit (role match + workload)
+
+PROACTIVE BEHAVIOR:
+- When the user describes a need or problem, suggest AND create the appropriate tasks, milestones, or assignments
+- For example, if someone mentions "we need to handle two risky decisions", proactively create risk assessment tasks and assign them to the Risk Manager
+- When creating tasks, always set appropriate priority and due dates based on urgency
+- If a milestone is overdue, suggest moving it or updating its status
+- Flag workload imbalances when you see them
+
+WORKLOAD ANALYSIS:
+- When discussing team members, always show their workload: active tasks, completed tasks, hours logged, and their role
+- Suggest redistributing work when someone is overloaded
+- Recommend task reassignment when a member's role is a better fit
+
+When you need to perform an action, output an action block:
 
 <<<ACTION>>>
 action_type: add_task
 params:
-  title: Build the API
+  title: Risk assessment for vendor contract
   priority: high
   due_date: 2026-06-15
+  assignee_name: Alex
+  milestone_name: Sprint 1
 <<<END_ACTION>>>
 
 Supported action types and their params:
 - add_member: name, role (optional), email (optional)
-- add_task: title, priority (optional, default medium), due_date (optional, YYYY-MM-DD), milestone_name (optional), assignee_name (optional)
+- update_member: member_name, name (optional), role (optional), email (optional)
+- add_task: title, description (optional), priority (optional, default medium), due_date (optional, YYYY-MM-DD), milestone_name (optional), assignee_name (optional)
+- update_task: task_title, title (optional), description (optional), priority (optional, low/medium/high), assignee_name (optional), milestone_name (optional), due_date (optional, YYYY-MM-DD)
+- update_task_status: task_title, status (todo/in_progress/done)
 - add_milestone: name, deadline (YYYY-MM-DD), start_date (optional, YYYY-MM-DD)
+- update_milestone_status: milestone_name, status (upcoming/in_progress/done/overdue)
+- assign_task: task_title, member_name
+- set_task_priority: task_title, priority (low/medium/high)
 - add_category: name, allocated (number)
 - add_expense: description, amount (number), category_name, paid_by (optional)
 - log_hours: member_name, hours (number), description (optional)
-- assign_task: task_title, member_name
-- update_task_status: task_title, status (todo/in_progress/done)
-- update_milestone_status: milestone_name, status (upcoming/in_progress/done/overdue)
 - remove_member: name
 - remove_task: title
 - remove_milestone: name
 - remove_category: name
 
-You can include multiple actions in one response if needed. Always explain what you're doing in plain text alongside the action blocks.
+You can include multiple actions in one response — for example, create a task AND assign it in the same reply.
+Always explain what you're doing in plain text alongside the action blocks.
 If the user just asks a question, answer it from the project data — no action block needed.
 
 Keep responses concise and practical.
@@ -305,6 +380,59 @@ def execute_action(action):
             db.session.add(c)
             db.session.commit()
             return f"Logged **{c.hours}h** for **{member.name}**!"
+
+        elif atype == 'update_task':
+            task = Task.query.filter(Task.title.ilike(f'%{params.get("task_title", "")}%')).first()
+            if not task:
+                return "Task not found."
+            if params.get('priority'):
+                task.priority = params['priority']
+            if params.get('description'):
+                task.description = params['description']
+            if params.get('due_date'):
+                task.due_date = datetime.strptime(params['due_date'], '%Y-%m-%d').date()
+            if params.get('assignee_name'):
+                member = Member.query.filter(Member.name.ilike(f'%{params["assignee_name"]}%')).first()
+                if member:
+                    task.assignee_id = member.id
+                else:
+                    return f"Member '{params['assignee_name']}' not found for task update."
+            if params.get('milestone_name'):
+                ms = Milestone.query.filter(Milestone.name.ilike(f'%{params["milestone_name"]}%')).first()
+                if ms:
+                    task.milestone_id = ms.id
+            db.session.commit()
+            changes = []
+            if params.get('priority'):
+                changes.append(f"priority → {task.priority}")
+            if params.get('assignee_name') and task.assignee:
+                changes.append(f"assigned to → {task.assignee.name}")
+            if params.get('milestone_name') and task.milestone:
+                changes.append(f"milestone → {task.milestone.name}")
+            if params.get('due_date'):
+                changes.append(f"due → {task.due_date.strftime('%b %d, %Y')}")
+            return f"Updated task **{task.title}** ({', '.join(changes)})" if changes else f"Updated task **{task.title}**."
+
+        elif atype == 'update_member':
+            member = Member.query.filter(Member.name.ilike(f'%{params.get("member_name", "")}%')).first()
+            if not member:
+                return "Member not found."
+            if params.get('name'):
+                member.name = params['name']
+            if params.get('role'):
+                member.role = params['role']
+            if params.get('email'):
+                member.email = params['email']
+            db.session.commit()
+            return f"Updated member **{member.name}** (Role: {member.role or 'No role'})"
+
+        elif atype == 'set_task_priority':
+            task = Task.query.filter(Task.title.ilike(f'%{params.get("task_title", "")}%')).first()
+            if not task:
+                return "Task not found."
+            task.priority = params.get('priority', task.priority)
+            db.session.commit()
+            return f"Set **{task.title}** priority to **{task.priority}**!"
 
         elif atype == 'assign_task':
             task = Task.query.filter(Task.title.ilike(f'%{params.get("task_title", "")}%')).first()
