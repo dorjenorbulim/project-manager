@@ -8,6 +8,160 @@ import re
 bp = Blueprint('main', __name__)
 
 
+def _regex_fallback(msg):
+    """Try to handle a message with the regex parser and return just the response text, or None."""
+    from flask import Flask
+    # Create a mock request context to reuse the regex logic
+    msg_lower = msg.lower().strip().rstrip('.')
+
+    # Quick action detection — if the message seems like it wants to change data
+    action_words = ['add', 'create', 'new', 'remove', 'delete', 'mark', 'set', 'update',
+                    'change', 'complete', 'finish', 'assign', 'allocate', 'log', 'track', 'record']
+    if not any(msg_lower.startswith(w) for w in action_words):
+        return None
+
+    # Import what we need for direct DB operations
+    from app.models import Member, Milestone, Task, BudgetCategory, Expense, Contribution
+
+    # Add member
+    m = re.match(r'(?:add|create|new)\s+member\s+(.+?)(?:\s+(?:email\s+|as\s+|role\s+)(.+))?$', msg_lower)
+    if m:
+        name = m.group(1).strip().title()
+        extra = m.group(2) or ''
+        role = ''
+        email_match = re.search(r'(\S+@\S+)', extra)
+        if email_match:
+            extra = extra.replace(email_match.group(1), '').strip()
+        if extra:
+            role = extra.strip()
+        existing = Member.query.filter(Member.name.ilike(f'%{name}%')).first()
+        if existing:
+            return f'A member named **{existing.name}** already exists.'
+        member = Member(name=name, email=email_match.group(1) if email_match else '', role=role)
+        db.session.add(member)
+        db.session.commit()
+        return f'Added member **{name}**!' + (f' (Role: {role})' if role else '')
+
+    # Add task
+    m = re.match(r'(?:add|create|new)\s+task\s+(.+?)(?:\s+(?:priority\s+|p=)(\w+))?(?:\s+(?:due\s+|due:)\s*(\S+))?$', msg_lower)
+    if m:
+        title = m.group(1).strip().title()
+        priority = m.group(2) or 'medium'
+        due_str = m.group(3)
+        due = datetime.strptime(due_str, '%Y-%m-%d').date() if due_str else parse_date(due_str) if due_str else None
+        task = Task(title=title, priority=priority, due_date=due)
+        db.session.add(task)
+        db.session.commit()
+        return f'Added task **{title}** (Priority: {priority})!'
+
+    # Add milestone
+    m = re.match(r'(?:add|create|new)\s+milestone\s+(.+?)(?:\s+deadline\s+(\S+))?(?:\s+start\s+(\S+))?$', msg_lower)
+    if m:
+        name = m.group(1).strip().title()
+        deadline = parse_date(m.group(2)) if m.group(2) else None
+        start_date = parse_date(m.group(3)) if m.group(3) else None
+        if not deadline:
+            return 'Please provide a deadline.'
+        ms = Milestone(name=name, start_date=start_date, deadline=deadline)
+        db.session.add(ms)
+        db.session.commit()
+        return f'Added milestone **{name}**!'
+
+    # Add category
+    m = re.match(r'(?:add|create|new)\s+(?:budget\s+)?category\s+(.+?)\s+\$?([\d.]+)$', msg_lower)
+    if m:
+        name = m.group(1).strip().title()
+        allocated = float(m.group(2))
+        db.session.add(BudgetCategory(name=name, allocated=allocated))
+        db.session.commit()
+        return f'Added budget category **{name}** with ${allocated:.2f}!'
+
+    # Add expense
+    m = re.match(r'(?:add|create|new|log)\s+(?:expense|spending|cost)\s+(?:(.+?)\s+)?\$?([\d.]+)(?:\s+(?:for|in|to)\s+(.+))?$', msg_lower)
+    if m:
+        description = (m.group(1) or 'Expense').strip().title()
+        amount = float(m.group(2))
+        cat_name = m.group(3).strip().title() if m.group(3) else None
+        cat = BudgetCategory.query.filter(BudgetCategory.name.ilike(f'%{cat_name}%')).first() if cat_name else None
+        if not cat:
+            cats = BudgetCategory.query.all()
+            return f'Category not found. Available: {", ".join(c.name for c in cats)}' if cats else 'No budget categories yet.'
+        exp = Expense(description=description, amount=amount, category_id=cat.id, date=date.today())
+        db.session.add(exp)
+        db.session.commit()
+        return f'Added expense **{description}** (${amount:.2f}) to **{cat.name}**!'
+
+    # Log hours
+    m = re.match(r'(?:log|track|record)\s+(\d+\.?\d*)\s+hours?\s+(?:for\s+)?(.+?)(?:\s+(?:doing|on|for|working\s+on)\s+(.+))?$', msg_lower)
+    if m:
+        hours = float(m.group(1))
+        member_name = m.group(2).strip().title()
+        description = m.group(3).strip() if m.group(3) else ''
+        member = Member.query.filter(Member.name.ilike(f'%{member_name}%')).first()
+        if not member:
+            names = ', '.join(m.name for m in Member.query.all()) or 'none'
+            return f'Member not found. Available: {names}'
+        contrib = Contribution(member_id=member.id, hours=hours, description=description, date=date.today())
+        db.session.add(contrib)
+        db.session.commit()
+        return f'Logged **{hours}h** for **{member.name}**!'
+
+    # Mark task status
+    m = re.match(r'(?:mark|set|update|change|complete|finish)\s+(?:task\s+)?(.+?)\s+(?:to\s+|as\s+)?(?:a\s+)?(todo|in.?progress|in_progress|done|complete|finished)$', msg_lower)
+    if m:
+        task_name = m.group(1).strip().title()
+        status = m.group(2).replace('in.progress', 'in_progress').replace('complete', 'done').replace('finished', 'done')
+        task = Task.query.filter(Task.title.ilike(f'%{task_name}%')).first()
+        if not task:
+            return 'Task not found.'
+        task.status = status
+        db.session.commit()
+        return f'Marked **{task.title}** as **{status}**!'
+
+    # Assign task
+    m = re.match(r'(?:who\s+should\s+(?:i\s+)?)?(?:assign|give|allocate)\s+(?:the\s+)?(?:task\s+)?(.+?)\s+to\s+(.+)$', msg_lower)
+    if m:
+        task_name = m.group(1).strip().title()
+        member_name = m.group(2).strip().title()
+        task = Task.query.filter(Task.title.ilike(f'%{task_name}%')).first()
+        member = Member.query.filter(Member.name.ilike(f'%{member_name}%')).first()
+        if not task:
+            return 'Task not found.'
+        if not member:
+            names = ', '.join(m.name for m in Member.query.all()) or 'none'
+            return f'Member not found. Available: {names}'
+        task.assignee_id = member.id
+        db.session.commit()
+        return f'Assigned **{task.title}** to **{member.name}**!'
+
+    # Delete/remove
+    m = re.match(r'(?:delete|remove)\s+(.+)$', msg_lower)
+    if m:
+        name = m.group(1).strip()
+        for prefix in ['member ', 'task ', 'milestone ', 'category ', 'expense ', 'the ']:
+            if name.startswith(prefix):
+                name = name[len(prefix):]
+        member = Member.query.filter(Member.name.ilike(f'%{name}%')).first()
+        if member:
+            Task.query.filter_by(assignee_id=member.id).update({'assignee_id': None})
+            db.session.delete(member)
+            db.session.commit()
+            return f'Removed member **{member.name}**!'
+        task = Task.query.filter(Task.title.ilike(f'%{name}%')).first()
+        if task:
+            db.session.delete(task)
+            db.session.commit()
+            return f'Deleted task **{task.title}**!'
+        ms = Milestone.query.filter(Milestone.name.ilike(f'%{name}%')).first()
+        if ms:
+            Task.query.filter_by(milestone_id=ms.id).update({'milestone_id': None})
+            db.session.delete(ms)
+            db.session.commit()
+            return f'Deleted milestone **{ms.name}**!'
+
+    return None
+
+
 # ─── Dashboard ───────────────────────────────────────────────
 
 @bp.route('/')
@@ -322,6 +476,18 @@ def chat():
             for action in actions:
                 result = execute_action(action)
                 action_results.append(result)
+
+            # If AI claimed to do something but produced no actions,
+            # fall back to regex parser to actually execute the command
+            if not actions and not action_results:
+                action_keywords = ['added', 'created', 'assigned', 'removed', 'deleted', 'marked',
+                                   'updated', 'logged', 'set', 'moved', 'changed']
+                if any(kw in ai_reply.lower() for kw in action_keywords):
+                    # Try the regex parser as fallback
+                    regex_result = _regex_fallback(msg)
+                    if regex_result:
+                        ai_reply = regex_result
+                        action_results = []
 
             # Build final response
             final_reply = ai_reply
