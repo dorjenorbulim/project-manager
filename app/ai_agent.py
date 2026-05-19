@@ -12,12 +12,12 @@ logger = logging.getLogger(__name__)
 #   AI_BASE_URL   — OpenAI-compatible endpoint (default: https://openrouter.ai/api/v1)
 AI_API_KEY = os.environ.get('AI_API_KEY', '')
 AI_BASE_URL = os.environ.get('AI_BASE_URL', 'https://openrouter.ai/api/v1')
-AI_MODEL = os.environ.get('AI_MODEL', 'meta-llama/llama-3.3-70b-instruct:free')
+AI_MODEL = os.environ.get('AI_MODEL', 'openai/gpt-oss-120b:free')
 
-# Fallback models if the primary returns empty/garbage responses
+# Fallback models if the primary is rate-limited or returns empty
 FALLBACK_MODELS = [
-    'deepseek/deepseek-v4-flash:free',
-    'google/gemma-4-31b-it:free',
+    'nvidia/nemotron-3-super-120b-a12b:free',
+    'qwen/qwen3-next-80b-a3b-instruct:free',
 ]
 
 
@@ -239,12 +239,14 @@ def chat_with_ai(user_message, conversation_history=None):
 
     messages.append({"role": "user", "content": user_message})
 
-    # Try primary model, then fallbacks if response is empty
+    import time
+    # Try primary model, then fallbacks if rate-limited or empty response
     reply = ''
     used_model = model
     models_to_try = [model] + [m for m in FALLBACK_MODELS if m != model]
+    last_error = None
 
-    for try_model in models_to_try:
+    for attempt, try_model in enumerate(models_to_try):
         try:
             extra_headers = {}
             if 'openrouter' in base_url:
@@ -262,14 +264,23 @@ def chat_with_ai(user_message, conversation_history=None):
             reply = response.choices[0].message.content or ''
             if reply.strip():
                 used_model = try_model
+                if attempt > 0:
+                    logger.info("Fallback to %s succeeded (primary %s failed)", try_model, model)
                 break
-            logger.warning("Empty response from model %s, trying fallback", try_model)
+            logger.warning("Empty response from model %s (attempt %d), trying fallback", try_model, attempt + 1)
         except Exception as e:
-            logger.warning("Model %s failed: %s, trying fallback", try_model, e)
+            last_error = str(e)
+            # If rate-limited, try next model immediately
+            if '429' in last_error or 'rate' in last_error.lower():
+                logger.warning("Model %s rate-limited (attempt %d), trying next", try_model, attempt + 1)
+                continue
+            logger.warning("Model %s failed: %s (attempt %d), trying fallback", try_model, e, attempt + 1)
             continue
 
     if not reply.strip():
-        return "AI is temporarily unavailable. Please try again in a moment.", []
+        if last_error:
+            return f"AI is temporarily unavailable (all models rate-limited). Last error: {last_error}. Please try again in a minute.", []
+        return "AI returned an empty response. Please try again.", []
 
     # Extract actions from reply
     actions = []
