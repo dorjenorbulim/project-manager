@@ -12,7 +12,13 @@ logger = logging.getLogger(__name__)
 #   AI_BASE_URL   — OpenAI-compatible endpoint (default: https://openrouter.ai/api/v1)
 AI_API_KEY = os.environ.get('AI_API_KEY', '')
 AI_BASE_URL = os.environ.get('AI_BASE_URL', 'https://openrouter.ai/api/v1')
-AI_MODEL = os.environ.get('AI_MODEL', 'google/gemma-3-27b-it:free')
+AI_MODEL = os.environ.get('AI_MODEL', 'meta-llama/llama-3.3-70b-instruct:free')
+
+# Fallback models if the primary returns empty/garbage responses
+FALLBACK_MODELS = [
+    'deepseek/deepseek-v4-flash:free',
+    'google/gemma-4-31b-it:free',
+]
 
 
 def is_ai_configured():
@@ -233,26 +239,37 @@ def chat_with_ai(user_message, conversation_history=None):
 
     messages.append({"role": "user", "content": user_message})
 
-    try:
-        extra_headers = {}
-        if 'openrouter' in base_url:
-            extra_headers = {
-                'HTTP-Referer': 'https://project-manager-vqcr.onrender.com',
-                'X-Title': 'Project Manager',
-            }
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            max_tokens=1024,
-            temperature=0.7,
-            extra_headers=extra_headers or None,
-        )
-        reply = response.choices[0].message.content or ''
-        if not reply.strip():
-            return "AI returned an empty response. Please try again.", []
-    except Exception as e:
-        logger.error("AI chat error: %s", e)
-        return f"AI error: {str(e)}", []
+    # Try primary model, then fallbacks if response is empty
+    reply = ''
+    used_model = model
+    models_to_try = [model] + [m for m in FALLBACK_MODELS if m != model]
+
+    for try_model in models_to_try:
+        try:
+            extra_headers = {}
+            if 'openrouter' in base_url:
+                extra_headers = {
+                    'HTTP-Referer': 'https://project-manager-vqcr.onrender.com',
+                    'X-Title': 'Project Manager',
+                }
+            response = client.chat.completions.create(
+                model=try_model,
+                messages=messages,
+                max_tokens=1024,
+                temperature=0.7,
+                extra_headers=extra_headers or None,
+            )
+            reply = response.choices[0].message.content or ''
+            if reply.strip():
+                used_model = try_model
+                break
+            logger.warning("Empty response from model %s, trying fallback", try_model)
+        except Exception as e:
+            logger.warning("Model %s failed: %s, trying fallback", try_model, e)
+            continue
+
+    if not reply.strip():
+        return "AI is temporarily unavailable. Please try again in a moment.", []
 
     # Extract actions from reply
     actions = []

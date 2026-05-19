@@ -20,5 +20,5 @@ services:
       - key: AI_BASE_URL
         value: https://openrouter.ai/api/v1
       - key: AI_MODEL
-        value: google/gemma-3-27b-it:free
+        value: meta-llama/llama-3.3-70b-instruct:free
     plan: free
