@@ -216,6 +216,15 @@ Supported action types and their params:
 You can include multiple actions in one response. Always include the action block so your changes actually take effect.
 If the user just asks a question (no changes needed), answer from the project data — no action block needed.
 Keep responses concise and practical.
+
+PROJECT MANAGEMENT KNOWLEDGE:
+You are also a project management expert. Answer questions about project management topics including but not limited to:
+- Methodologies: Agile, Scrum, Kanban, Waterfall, PRINCE2, PMBOK
+- Tools & techniques: Gantt charts, risk registers, work breakdown structures, burndown charts, critical path method
+- Concepts: scope creep, risk mitigation, stakeholder management, resource allocation, sprint planning, retrospectives, MoSCoW prioritization
+- Roles: project manager, scrum master, product owner, risk manager, QA lead, business analyst
+- Best practices: estimation techniques, team velocity, definition of done, acceptance criteria, risk assessment matrices
+When answering, relate the concept to the user's actual project data when relevant.
 """
 
 
@@ -287,16 +296,16 @@ def chat_with_ai(user_message, conversation_history=None):
             return f"AI is temporarily unavailable (all models rate-limited). Last error: {last_error}. Please try again in a minute.", []
         return "AI returned an empty response. Please try again.", []
 
-    # Extract actions from reply
+    # Extract actions from reply (handle variations: <<<ACTION>>> or <<<ACTION>> or <<ACTION>>>)
     actions = []
-    action_blocks = re.findall(r'<<<ACTION>>>(.+?)<<<END_ACTION>>>', reply, re.DOTALL)
+    action_blocks = re.findall(r'<<<ACTION>{2,3}>(.+?)<<<END_ACTION>{2,3}>', reply, re.DOTALL)
     for block in action_blocks:
         action = parse_action_block(block.strip())
         if action:
             actions.append(action)
 
     # Clean the reply text (remove action blocks)
-    clean_reply = re.sub(r'<<<ACTION>>>.+?<<<END_ACTION>>>', '', reply, flags=re.DOTALL).strip()
+    clean_reply = re.sub(r'<<<ACTION>{2,3}>.+?<<<END_ACTION>{2,3}>', '', reply, flags=re.DOTALL).strip()
 
     return clean_reply, actions
 
