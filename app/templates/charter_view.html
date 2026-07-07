@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+{% block title %}{{ charter.name }} - Charter{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+    <div>
+        <h1 style="margin-bottom:4px;">{{ charter.name }}</h1>
+        {% if charter.description %}<p style="color:#555;max-width:720px;">{{ charter.description }}</p>{% endif %}
+        <p style="color:#86868b;font-size:13px;margin-top:4px;">
+            {% if charter.start_date %}{{ charter.start_date.strftime('%b %d, %Y') }}{% else %}Start TBD{% endif %}
+            &rarr;
+            {% if charter.end_date %}{{ charter.end_date.strftime('%b %d, %Y') }}{% else %}End TBD{% endif %}
+            {% if charter.budget %} &middot; Budget: ${{ "%.2f"|format(charter.budget) }}{% endif %}
+        </p>
+    </div>
+    <div style="display:flex;gap:8px;">
+        <form method="POST" action="/charters/{{ charter.id }}/regenerate-outline" style="display:inline;" onsubmit="return confirm('Regenerate the outline from your description? This replaces the current outline.');">
+            <button type="submit" class="btn" style="background:#f0f0f5;color:#1d1d1f;">Regenerate outline</button>
+        </form>
+        <form method="POST" action="/charters/{{ charter.id }}/delete" style="display:inline;" onsubmit="return confirm('Delete this charter and all its stakeholders?');">
+            <button type="submit" class="btn btn-danger">Delete charter</button>
+        </form>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom:24px;">
+    <a href="/charters">&larr; All charters</a>
+</div>
+
+<!-- ─── Charter outline ────────────────────────────────── -->
+<div class="card charter-section">
+    <h2 style="margin-top:0;">Charter Outline</h2>
+
+    {% set o = charter.outline %}
+
+    <h3>Objectives</h3>
+    {% for item in o.get('objectives', []) %}<span class="chip">{{ item }}</span>{% endfor %}
+    {% if not o.get('objectives') %}<p style="color:#86868b;">No objectives yet.</p>{% endif %}
+
+    <h3>Scope</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div>
+            <strong>In scope</strong>
+            {% for item in o.get('scope_in', []) %}<span class="chip">{{ item }}</span>{% endfor %}
+            {% if not o.get('scope_in') %}<p style="color:#86868b;">None listed.</p>{% endif %}
+        </div>
+        <div>
+            <strong>Out of scope</strong>
+            {% for item in o.get('scope_out', []) %}<span class="chip chip-out">{{ item }}</span>{% endfor %}
+            {% if not o.get('scope_out') %}<p style="color:#86868b;">None listed.</p>{% endif %}
+        </div>
+    </div>
+
+    <h3>Deliverables</h3>
+    {% for item in o.get('deliverables', []) %}<span class="chip">{{ item }}</span>{% endfor %}
+    {% if not o.get('deliverables') %}<p style="color:#86868b;">No deliverables yet.</p>{% endif %}
+
+    <h3>Milestone Timeline</h3>
+    {% if o.get('milestones') %}
+    <table>
+        <tr><th>Milestone</th><th>Week offset</th></tr>
+        {% for m in o.get('milestones', []) %}
+        <tr><td>{{ m.name }}</td><td>Week {{ m.weeks }}</td></tr>
+        {% endfor %}
+    </table>
+    {% else %}
+    <p style="color:#86868b;">No milestones yet.</p>
+    {% endif %}
+
+    <h3>Success Criteria</h3>
+    {% for item in o.get('success_criteria', []) %}<span class="chip">{{ item }}</span>{% endfor %}
+    {% if not o.get('success_criteria') %}<p style="color:#86868b;">No success criteria yet.</p>{% endif %}
+
+    <h3>Key Risks</h3>
+    {% for r in o.get('risks', []) %}
+    <div class="chip chip-risk" style="display:block;margin-bottom:6px;">
+        <strong>{{ r.name }}</strong>{% if r.mitigation %}: {{ r.mitigation }}{% endif %}
+    </div>
+    {% endfor %}
+    {% if not o.get('risks') %}<p style="color:#86868b;">No risks listed.</p>{% endif %}
+
+    <h3>Assumptions</h3>
+    {% for item in o.get('assumptions', []) %}<span class="chip">{{ item }}</span>{% endfor %}
+    {% if not o.get('assumptions') %}<p style="color:#86868b;">No assumptions listed.</p>{% endif %}
+</div>
+
+<!-- ─── Edit outline ───────────────────────────────────── -->
+<div class="card charter-section">
+    <h2 style="margin-top:0;">Edit Outline</h2>
+    <p style="color:#86868b;font-size:13px;margin-bottom:16px;">One item per line. Milestones and risks use paired rows.</p>
+    <form method="POST" action="/charters/{{ charter.id }}/outline">
+        <div class="grid grid-2" style="gap:16px;">
+            <div class="form-group">
+                <label>Objectives</label>
+                <textarea name="objectives">{{ o.get('objectives', [])|join('\n') }}</textarea>
+            </div>
+            <div class="form-group">
+                <label>Success criteria</label>
+                <textarea name="success_criteria">{{ o.get('success_criteria', [])|join('\n') }}</textarea>
+            </div>
+            <div class="form-group">
+                <label>In scope</label>
+                <textarea name="scope_in">{{ o.get('scope_in', [])|join('\n') }}</textarea>
+            </div>
+            <div class="form-group">
+                <label>Out of scope</label>
+                <textarea name="scope_out">{{ o.get('scope_out', [])|join('\n') }}</textarea>
+            </div>
+            <div class="form-group">
+                <label>Deliverables</label>
+                <textarea name="deliverables">{{ o.get('deliverables', [])|join('\n') }}</textarea>
+            </div>
+            <div class="form-group">
+                <label>Assumptions</label>
+                <textarea name="assumptions">{{ o.get('assumptions', [])|join('\n') }}</textarea>
+            </div>
+        </div>
+
+        <h3 style="margin-top:16px;">Milestones</h3>
+        <div id="milestoneRows">
+            {% for m in o.get('milestones', []) %}
+            <div class="ms-row" style="display:flex;gap:8px;margin-bottom:6px;">
+                <input type="text" name="milestone_name" value="{{ m.name }}" placeholder="Milestone name" style="flex:1;">
+                <input type="number" name="milestone_weeks" value="{{ m.weeks }}" placeholder="Week" style="width:90px;">
+                <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.ms-row').remove();">x</button>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="button" class="btn btn-sm" style="background:#f0f0f5;margin-bottom:12px;" onclick="addMsRow()">+ Add milestone</button>
+
+        <h3 style="margin-top:16px;">Risks</h3>
+        <div id="riskRows">
+            {% for r in o.get('risks', []) %}
+            <div class="risk-row" style="display:flex;gap:8px;margin-bottom:6px;">
+                <input type="text" name="risk_name" value="{{ r.name }}" placeholder="Risk" style="flex:1;">
+                <input type="text" name="risk_mitigation" value="{{ r.mitigation }}" placeholder="Mitigation" style="flex:1;">
+                <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.risk-row').remove();">x</button>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="button" class="btn btn-sm" style="background:#f0f0f5;margin-bottom:12px;" onclick="addRiskRow()">+ Add risk</button>
+
+        <div style="margin-top:12px;">
+            <button type="submit" class="btn btn-primary">Save outline</button>
+        </div>
+    </form>
+</div>
+
+<!-- ─── Stakeholder analysis ───────────────────────────── -->
+<div class="card charter-section" id="stakeholders">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <h2 style="margin:0 0 4px;">Stakeholder Analysis</h2>
+        <form method="POST" action="/charters/{{ charter.id }}/stakeholders/suggest" style="display:inline;" onsubmit="return confirm('Suggest stakeholders and add them to this charter? You can tune them afterwards.');">
+            <button type="submit" class="btn" style="background:#f0f0f5;color:#1d1d1f;">Suggest stakeholders</button>
+        </form>
+    </div>
+    <p style="color:#86868b;font-size:13px;margin-bottom:16px;">
+        Rate each stakeholder on interest (1-5) and influence/power (1-5). They are auto-categorised on a
+        Power/Interest grid to show who to manage closely, keep satisfied, keep informed, or just monitor.
+    </p>
+
+    {% if stakeholders %}
+    <!-- Power/Interest grid -->
+    <div class="pi-grid">
+        <div class="pi-axis"></div>
+        <div class="pi-axis">Low Interest</div>
+        <div class="pi-axis">High Interest</div>
+
+        <div class="pi-axis" style="writing-mode:vertical-lr;transform:rotate(180deg);">High Power &uarr;<br>Low Power &darr;</div>
+        <div class="pi-cell cat-keep_satisfied">
+            <div class="pi-label">Keep Satisfied</div>
+            {% for s in stakeholders if s.category == 'keep_satisfied' %}
+            <div class="pi-name">{{ s.name }}</div>
+            {% endfor %}
+        </div>
+        <div class="pi-cell cat-manage_closely">
+            <div class="pi-label">Manage Closely</div>
+            {% for s in stakeholders if s.category == 'manage_closely' %}
+            <div class="pi-name">{{ s.name }}</div>
+            {% endfor %}
+        </div>
+
+        <div class="pi-axis"></div>
+        <div class="pi-cell cat-monitor">
+            <div class="pi-label">Monitor</div>
+            {% for s in stakeholders if s.category == 'monitor' %}
+            <div class="pi-name">{{ s.name }}</div>
+            {% endfor %}
+        </div>
+        <div class="pi-cell cat-keep_informed">
+            <div class="pi-label">Keep Informed</div>
+            {% for s in stakeholders if s.category == 'keep_informed' %}
+            <div class="pi-name">{{ s.name }}</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Categorised lists -->
+    {% set cats = [('manage_closely', 'Manage Closely', 'Most important - engage regularly and collaborate on decisions.'),
+                   ('keep_satisfied', 'Keep Satisfied', 'High power but lower interest - consult regularly, keep them on side.'),
+                   ('keep_informed', 'Keep Informed', 'High interest but lower power - keep them informed and updated.'),
+                   ('monitor', 'Monitor', 'Low power and low interest - monitor with minimal effort.')] %}
+    {% for cat_key, cat_label, cat_hint in cats %}
+    {% set cat_stakeholders = stakeholders|selectattr('category','equalto',cat_key)|list %}
+    {% if cat_stakeholders %}
+    <div class="stakeholder-cat cat-{{ cat_key }}">
+        <h4>{{ cat_label }}</h4>
+        <div class="cat-hint">{{ cat_hint }}</div>
+        {% for s in cat_stakeholders %}
+        <div style="background:#fff;border-radius:8px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+            <div style="flex:1;min-width:200px;">
+                <strong>{{ s.name }}</strong>
+                {% if s.role %}<span style="color:#86868b;font-size:13px;margin-left:6px;">({{ s.role }})</span>{% endif %}
+                {% if s.organization %}<div style="font-size:12px;color:#86868b;">{{ s.organization }}</div>{% endif %}
+                {% if s.notes %}<div style="font-size:13px;color:#555;margin-top:4px;">{{ s.notes }}</div>{% endif %}
+                <div style="font-size:12px;color:#86868b;margin-top:4px;">Interest {{ s.interest }}/5 &middot; Influence {{ s.influence }}/5</div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;">
+                <button type="button" class="btn btn-sm" style="background:#f0f0f5;" onclick="toggleEdit({{ s.id }})">Edit</button>
+                <form method="POST" action="/charters/{{ charter.id }}/stakeholders/{{ s.id }}/delete" style="display:inline;" onsubmit="return confirm('Remove {{ s.name }}?');">
+                    <button type="submit" class="btn btn-danger btn-sm">Remove</button>
+                </form>
+            </div>
+        </div>
+        <form id="edit-{{ s.id }}" method="POST" action="/charters/{{ charter.id }}/stakeholders/{{ s.id }}/update" style="display:none;background:#fff;border-radius:8px;padding:12px;margin-bottom:8px;">
+            <div class="grid grid-2" style="gap:8px;">
+                <input type="text" name="name" value="{{ s.name }}" placeholder="Name">
+                <input type="text" name="role" value="{{ s.role or '' }}" placeholder="Role">
+                <input type="text" name="organization" value="{{ s.organization or '' }}" placeholder="Organization">
+                <input type="email" name="email" value="{{ s.email or '' }}" placeholder="Email">
+                <div>
+                    <label style="font-size:12px;color:#86868b;">Interest (1-5)</label>
+                    <input type="number" name="interest" min="1" max="5" value="{{ s.interest }}">
+                </div>
+                <div>
+                    <label style="font-size:12px;color:#86868b;">Influence (1-5)</label>
+                    <input type="number" name="influence" min="1" max="5" value="{{ s.influence }}">
+                </div>
+            </div>
+            <div class="form-group" style="margin-top:8px;">
+                <textarea name="notes" placeholder="Notes">{{ s.notes or '' }}</textarea>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Save</button>
+        </form>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    <!-- Full table -->
+    <h3 style="margin-top:20px;">All stakeholders (priority order)</h3>
+    <table>
+        <tr><th>Priority</th><th>Name</th><th>Role</th><th>Interest</th><th>Influence</th><th>Category</th></tr>
+        {% for s in stakeholders %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ s.name }}</td>
+            <td>{{ s.role or '-' }}</td>
+            <td>{{ s.interest }}/5</td>
+            <td>{{ s.influence }}/5</td>
+            <td><span class="badge badge-{{ 'done' if s.category == 'manage_closely' else ('medium' if s.category == 'keep_satisfied' else ('low' if s.category == 'keep_informed' else 'todo')) }}">{{ s.category_label }}</span></td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% else %}
+    <p style="color:#86868b;">No stakeholders yet. Click <strong>Suggest stakeholders</strong> above for a starter list, or add one manually below.</p>
+    {% endif %}
+
+    <h3 style="margin-top:20px;">Add stakeholder</h3>
+    <form method="POST" action="/charters/{{ charter.id }}/stakeholders/add" class="add-form" style="padding:16px;">
+        <div class="grid grid-2" style="gap:8px;">
+            <div class="form-group">
+                <label>Name *</label>
+                <input type="text" name="name" required placeholder="e.g. Finance Director">
+            </div>
+            <div class="form-group">
+                <label>Role</label>
+                <input type="text" name="role" placeholder="e.g. Budget approver">
+            </div>
+            <div class="form-group">
+                <label>Organization</label>
+                <input type="text" name="organization" placeholder="e.g. Finance team">
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" name="email" placeholder="optional">
+            </div>
+            <div class="form-group">
+                <label>Interest (1-5)</label>
+                <input type="number" name="interest" min="1" max="5" value="3">
+            </div>
+            <div class="form-group">
+                <label>Influence (1-5)</label>
+                <input type="number" name="influence" min="1" max="5" value="3">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Notes</label>
+            <textarea name="notes" placeholder="How to engage them"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Add stakeholder</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function addMsRow() {
+    const div = document.createElement('div');
+    div.className = 'ms-row';
+    div.style.cssText = 'display:flex;gap:8px;margin-bottom:6px;';
+    div.innerHTML = '<input type="text" name="milestone_name" placeholder="Milestone name" style="flex:1;"><input type="number" name="milestone_weeks" placeholder="Week" style="width:90px;"><button type="button" class="btn btn-danger btn-sm" onclick="this.closest(\'.ms-row\').remove();">x</button>';
+    document.getElementById('milestoneRows').appendChild(div);
+}
+function addRiskRow() {
+    const div = document.createElement('div');
+    div.className = 'risk-row';
+    div.style.cssText = 'display:flex;gap:8px;margin-bottom:6px;';
+    div.innerHTML = '<input type="text" name="risk_name" placeholder="Risk" style="flex:1;"><input type="text" name="risk_mitigation" placeholder="Mitigation" style="flex:1;"><button type="button" class="btn btn-danger btn-sm" onclick="this.closest(\'.risk-row\').remove();">x</button>';
+    document.getElementById('riskRows').appendChild(div);
+}
+function toggleEdit(id) {
+    const form = document.getElementById('edit-' + id);
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+</script>
+{% endblock %}

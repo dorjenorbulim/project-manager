@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}New Project Charter{% endblock %}
+{% block content %}
+<h1>New Project Charter</h1>
+<p style="color:#86868b;margin-bottom:24px;max-width:640px;">
+    Give your project a name and a short description. The builder will suggest a full charter outline
+    (objectives, scope, deliverables, milestones, success criteria, risks, assumptions) for you to review and edit.
+    {% if ai_status.configured %}
+    <span class="badge badge-done" style="margin-left:4px;">AI: {{ ai_status.model }}</span>
+    {% else %}
+    <span class="badge badge-todo" style="margin-left:4px;">Template mode</span>
+    {% endif %}
+</p>
+
+<div class="grid grid-2">
+    <div class="card">
+        <form method="POST" action="/charters/new">
+            <div class="form-group">
+                <label for="name">Project name *</label>
+                <input type="text" id="name" name="name" required placeholder="e.g. Mobile Banking App Launch">
+            </div>
+            <div class="form-group">
+                <label for="description">Short description</label>
+                <textarea id="description" name="description" placeholder="One or two sentences on what the project is and why it matters."></textarea>
+            </div>
+            <div class="grid grid-2" style="gap:12px;">
+                <div class="form-group">
+                    <label for="start_date">Start date (optional)</label>
+                    <input type="date" id="start_date" name="start_date">
+                </div>
+                <div class="form-group">
+                    <label for="end_date">Target end date (optional)</label>
+                    <input type="date" id="end_date" name="end_date">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="budget">Indicative budget (optional)</label>
+                <input type="number" id="budget" name="budget" step="0.01" min="0" placeholder="0">
+            </div>
+            <button type="submit" class="btn btn-primary">Generate charter outline</button>
+        </form>
+    </div>
+    <div class="card">
+        <h3>What you get</h3>
+        <ul style="margin-left:20px;line-height:1.8;color:#555;">
+            <li>Smart objectives tailored to your description</li>
+            <li>In-scope and out-of-scope lists</li>
+            <li>Concrete deliverables</li>
+            <li>A milestone timeline (by week offset)</li>
+            <li>Success / acceptance criteria</li>
+            <li>Key risks with mitigations</li>
+            <li>Assumptions to validate</li>
+        </ul>
+        <p style="color:#86868b;font-size:13px;margin-top:12px;">
+            After generating, you can edit any section and build a stakeholder analysis on the same charter.
+        </p>
+    </div>
+</div>
+{% endblock %}

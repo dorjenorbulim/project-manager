@@ -35,32 +35,28 @@
     </div>
 </div>
 
-<!-- AI Assistant Panel -->
-<div class="card ai-panel" style="margin-bottom: 24px; padding: 0; overflow: hidden;">
-    <div class="ai-panel-header">
-        <div style="display:flex;align-items:center;gap:10px;">
-            <span class="ai-icon">&#9889;</span>
-            <span>AI Project Assistant</span>
-            <span class="ai-badge
-                {% if ai_status.configured %}ai-badge-online
-                {% else %}ai-badge-basic{% endif %}">
-                {% if ai_status.configured %}{{ ai_status.model }} &middot; {{ ai_status.provider }} Online
-                {% else %}Basic Mode{% endif %}
-            </span>
+<!-- Charter quick-access -->
+<div class="card" style="margin-bottom: 24px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+        <div>
+            <h2 style="margin:0 0 4px;">Project Charters</h2>
+            <p style="color:#86868b;font-size:14px;">Build a charter from a name and a short description - the outline is suggested for you.</p>
         </div>
-        <button class="ai-reset-btn" id="aiResetBtn" title="Reset conversation">Reset</button>
+        <a href="/charters/new" class="btn btn-primary">+ New Charter</a>
     </div>
-    <div class="ai-panel-body">
-        <div class="ai-messages" id="aiMessages">
-            <div class="ai-msg ai-msg-bot">
-                <span>Hi! I'm your AI project assistant. I can help you manage tasks, members, budget, and more. Try asking me anything, or type <strong>help</strong> for commands.</span>
-            </div>
-        </div>
-        <div class="ai-input-row">
-            <input type="text" id="aiInput" placeholder="Ask me anything about your project..." autocomplete="off">
-            <button id="aiSend">&#10148;</button>
-        </div>
-    </div>
+    {% if charters %}
+    <table style="margin-top:12px;">
+        <tr><th>Name</th><th>Stakeholders</th><th>Created</th><th></th></tr>
+        {% for c in charters[:5] %}
+        <tr>
+            <td><a href="/charters/{{ c.id }}">{{ c.name }}</a></td>
+            <td>{{ c.stakeholders|length }}</td>
+            <td>{{ c.created_at.strftime('%b %d, %Y') }}</td>
+            <td><a href="/charters/{{ c.id }}" class="btn btn-sm btn-primary">Open</a></td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% endif %}
 </div>
 
 <div class="grid grid-2" style="margin-bottom: 24px; gap: 24px;">
@@ -135,60 +131,4 @@
     <p style="color:#86868b">No members yet. <a href="/members">Add one</a></p>
     {% endif %}
 </div>
-
-<script>
-(function() {
-    const input = document.getElementById('aiInput');
-    const send = document.getElementById('aiSend');
-    const msgContainer = document.getElementById('aiMessages');
-    const resetBtn = document.getElementById('aiResetBtn');
-
-    function addMsg(text, type) {
-        const div = document.createElement('div');
-        div.className = 'ai-msg ai-msg-' + type;
-        const span = document.createElement('span');
-        span.innerHTML = text.replace(/\n/g, '<br>');
-        div.appendChild(span);
-        msgContainer.appendChild(div);
-        msgContainer.scrollTop = msgContainer.scrollHeight;
-    }
-
-    async function sendMsg() {
-        const text = input.value.trim();
-        if (!text) return;
-        addMsg(text, 'user');
-        input.value = '';
-
-        const typing = document.createElement('div');
-        typing.className = 'ai-msg ai-msg-typing';
-        typing.innerHTML = '<span>Thinking...</span>';
-        msgContainer.appendChild(typing);
-        msgContainer.scrollTop = msgContainer.scrollHeight;
-
-        try {
-            const res = await fetch('/api/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: text })
-            });
-            const data = await res.json();
-            typing.remove();
-            addMsg(data.response, 'bot');
-        } catch (e) {
-            typing.remove();
-            addMsg('Sorry, something went wrong. Please try again.', 'bot');
-        }
-    }
-
-    async function resetChat() {
-        await fetch('/api/chat/reset', { method: 'POST' });
-        msgContainer.innerHTML = '<div class="ai-msg ai-msg-bot"><span>Conversation reset! How can I help with your project?</span></div>';
-    }
-
-    send.addEventListener('click', sendMsg);
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMsg(); });
-    resetBtn.addEventListener('click', resetChat);
-    input.focus();
-})();
-</script>
 {% endblock %}

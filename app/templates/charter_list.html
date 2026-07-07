@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Project Charters{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;">
+    <h1>Project Charters</h1>
+    <a href="/charters/new" class="btn btn-primary">+ New Charter</a>
+</div>
+
+{% if charters %}
+<div class="card" style="padding:0;overflow:hidden;">
+    <table>
+        <tr><th>Name</th><th>Description</th><th>Stakeholders</th><th>Created</th><th></th></tr>
+        {% for c in charters %}
+        <tr>
+            <td><a href="/charters/{{ c.id }}"><strong>{{ c.name }}</strong></a></td>
+            <td style="color:#86868b;max-width:360px;">{{ (c.description or '')[:120] }}{% if c.description and c.description|length > 120 %}...{% endif %}</td>
+            <td>{{ c.stakeholders|length }}</td>
+            <td>{{ c.created_at.strftime('%b %d, %Y') }}</td>
+            <td>
+                <a href="/charters/{{ c.id }}" class="btn btn-sm btn-primary">Open</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:48px;">
+    <p style="color:#86868b;margin-bottom:16px;">No project charters yet.</p>
+    <a href="/charters/new" class="btn btn-primary">Build your first charter</a>
+    <p style="color:#86868b;font-size:13px;margin-top:12px;">Just give a name and a short description - the outline is suggested for you.</p>
+</div>
+{% endif %}
+{% endblock %}

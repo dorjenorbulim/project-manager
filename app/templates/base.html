@@ -82,52 +82,32 @@
         .gantt-bar-overdue { background: #f44336; }
         .gantt-today { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff9800; z-index: 2; }
         /* Chatbot */
-        .chat-toggle { position: fixed; bottom: 24px; right: 24px; width: 56px; height: 56px; border-radius: 50%; background: #007aff; color: #fff; border: none; cursor: pointer; font-size: 24px; box-shadow: 0 4px 12px rgba(0,122,255,.4); display: flex; align-items: center; justify-content: center; z-index: 1000; transition: transform .2s; }
-        .chat-toggle:hover { transform: scale(1.1); }
-        .chat-window { position: fixed; bottom: 92px; right: 24px; width: 380px; max-height: 520px; background: #fff; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,.15); display: none; flex-direction: column; z-index: 1000; overflow: hidden; }
-        .chat-window.open { display: flex; }
-        .chat-header { background: #1d1d1f; color: #fff; padding: 14px 18px; font-weight: 600; font-size: 15px; display: flex; justify-content: space-between; align-items: center; }
-        .chat-header button { background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; opacity: .7; }
-        .chat-header button:hover { opacity: 1; }
-        .chat-messages { flex: 1; overflow-y: auto; padding: 16px; max-height: 380px; }
-        .chat-msg { margin-bottom: 12px; line-height: 1.5; }
-        .chat-msg.user { text-align: right; }
-        .chat-msg.user span { background: #007aff; color: #fff; padding: 8px 14px; border-radius: 16px 16px 4px 16px; display: inline-block; max-width: 80%; text-align: left; font-size: 14px; }
-        .chat-msg.bot span { background: #f0f0f5; color: #1d1d1f; padding: 8px 14px; border-radius: 16px 16px 16px 4px; display: inline-block; max-width: 85%; text-align: left; font-size: 14px; }
-        .chat-msg.bot strong { font-weight: 600; }
-        .chat-input-area { display: flex; border-top: 1px solid #e5e5ea; }
-        .chat-input-area input { flex: 1; border: none; padding: 14px 16px; font-size: 14px; outline: none; }
-        .chat-input-area button { background: #007aff; color: #fff; border: none; padding: 14px 18px; cursor: pointer; font-size: 16px; }
-        .chat-input-area button:hover { background: #0056cc; }
-        .chat-typing { color: #86868b; font-size: 13px; margin-bottom: 8px; padding-left: 4px; }
-        /* AI Panel (Dashboard Embedded) */
-        .ai-panel { border: 1px solid #e0e0e0; }
-        .ai-panel-header { background: linear-gradient(135deg, #1d1d1f, #2d2d30); color: #fff; padding: 14px 20px; font-weight: 600; font-size: 15px; display: flex; justify-content: space-between; align-items: center; }
-        .ai-icon { font-size: 20px; }
-        .ai-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
-        .ai-badge-online { background: #4caf50; color: #fff; }
-        .ai-badge-basic { background: #757575; color: #fff; }
-        .ai-reset-btn { background: rgba(255,255,255,.15); color: #fff; border: 1px solid rgba(255,255,255,.3); border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer; transition: background .2s; }
-        .ai-reset-btn:hover { background: rgba(255,255,255,.25); }
-        .ai-panel-body { display: flex; flex-direction: column; height: 320px; }
-        .ai-messages { flex: 1; overflow-y: auto; padding: 16px 20px; }
-        .ai-msg { margin-bottom: 10px; line-height: 1.5; }
-        .ai-msg-user { text-align: right; }
-        .ai-msg-user span { background: #007aff; color: #fff; padding: 8px 14px; border-radius: 16px 16px 4px 16px; display: inline-block; max-width: 75%; text-align: left; font-size: 14px; }
-        .ai-msg-bot span { background: #f0f0f5; color: #1d1d1f; padding: 8px 14px; border-radius: 16px 16px 16px 4px; display: inline-block; max-width: 80%; text-align: left; font-size: 14px; }
-        .ai-msg-bot strong { font-weight: 600; }
-        .ai-msg-typing span { background: #f0f0f5; color: #86868b; padding: 8px 14px; border-radius: 16px 16px 16px 4px; display: inline-block; font-size: 13px; font-style: italic; }
-        .ai-input-row { display: flex; border-top: 1px solid #e5e5ea; }
-        .ai-input-row input { flex: 1; border: none; padding: 14px 20px; font-size: 14px; outline: none; }
-        .ai-input-row button { background: #007aff; color: #fff; border: none; padding: 14px 20px; cursor: pointer; font-size: 16px; }
-        .ai-input-row button:hover { background: #0056cc; }
-        body.page-dashboard .chat-toggle { display: none; }
+        /* Charter & stakeholder styles */
+        .charter-section { margin-bottom: 28px; }
+        .charter-section h3 { border-bottom: 2px solid #f0f0f0; padding-bottom: 6px; margin-bottom: 12px; }
+        .chip { display: inline-block; background: #f0f0f5; border-radius: 8px; padding: 6px 12px; margin: 4px 6px 4px 0; font-size: 14px; }
+        .chip-out { background: #ffebee; color: #c62828; }
+        .chip-risk { background: #fff3e0; color: #e65100; }
+        .stakeholder-cat { border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+        .stakeholder-cat h4 { margin: 0 0 4px 0; font-size: 15px; }
+        .stakeholder-cat .cat-hint { font-size: 12px; color: #86868b; margin-bottom: 12px; }
+        .cat-manage_closely { background: #e3f2fd; border-left: 4px solid #1565c0; }
+        .cat-keep_satisfied { background: #fff8e1; border-left: 4px solid #ff8f00; }
+        .cat-keep_informed { background: #e8f5e9; border-left: 4px solid #2e7d32; }
+        .cat-monitor { background: #f5f5f5; border-left: 4px solid #9e9e9e; }
+        /* Power/Interest grid */
+        .pi-grid { display: grid; grid-template-columns: 80px 1fr 1fr; grid-template-rows: 40px 1fr 1fr; gap: 2px; max-width: 480px; margin: 16px 0; font-size: 12px; }
+        .pi-axis { background: #fafafa; display: flex; align-items: center; justify-content: center; font-weight: 600; color: #86868b; text-align: center; padding: 4px; }
+        .pi-cell { border: 1px dashed #d2d2d7; border-radius: 8px; padding: 8px; min-height: 100px; }
+        .pi-cell .pi-label { font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+        .pi-cell .pi-name { background: #fff; border-radius: 6px; padding: 3px 8px; margin: 3px 0; font-size: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
     </style>
 </head>
 <body {% block body_attrs %}{% endblock %}>
     <nav class="nav">
         <a href="/" class="brand">PM</a>
         <a href="/">Dashboard</a>
+        <a href="/charters">Charters</a>
         <a href="/schedule">Schedule</a>
         <a href="/tasks">Tasks</a>
         <a href="/budget">Budget</a>
@@ -145,98 +125,6 @@
         {% block content %}{% endblock %}
     </div>
 
-    <!-- Chat Toggle -->
-    <button class="chat-toggle" id="chatToggle" title="Project Assistant">&#9783;</button>
-
-    <!-- Chat Window -->
-    <div class="chat-window" id="chatWindow">
-        <div class="chat-header">
-            <span>Project Assistant <span id="aiStatusBadge" style="font-size:10px;padding:2px 6px;border-radius:8px;margin-left:6px;vertical-align:middle;">checking...</span></span>
-            <button id="chatClose">&times;</button>
-        </div>
-        <div class="chat-messages" id="chatMessages">
-            <div class="chat-msg bot"><span>Hi! I can help manage your project. Try asking me anything, or type <strong>help</strong> for commands.</span></div>
-        </div>
-        <div class="chat-input-area">
-            <input type="text" id="chatInput" placeholder="Type a command..." autocomplete="off">
-            <button id="chatSend">&#10148;</button>
-        </div>
-    </div>
-
-    <script>
-    (function() {
-        const toggle = document.getElementById('chatToggle');
-        const win = document.getElementById('chatWindow');
-        const close = document.getElementById('chatClose');
-        const input = document.getElementById('chatInput');
-        const send = document.getElementById('chatSend');
-        const messages = document.getElementById('chatMessages');
-        const statusBadge = document.getElementById('aiStatusBadge');
-
-        toggle.addEventListener('click', () => { win.classList.toggle('open'); if(win.classList.contains('open')) input.focus(); });
-        close.addEventListener('click', () => { win.classList.remove('open'); });
-
-        // Check AI status
-        fetch('/api/ai/status').then(r => r.json()).then(status => {
-            if (status.configured) {
-                statusBadge.textContent = (status.provider || 'AI') + ' · ' + (status.model || '');
-                statusBadge.style.background = '#4caf50';
-                statusBadge.style.color = '#fff';
-            } else {
-                statusBadge.textContent = 'Basic';
-                statusBadge.style.background = '#e0e0e0';
-                statusBadge.style.color = '#555';
-            }
-        }).catch(() => {
-            statusBadge.textContent = 'Basic';
-            statusBadge.style.background = '#e0e0e0';
-            statusBadge.style.color = '#555';
-        });
-
-        function addMsg(text, type) {
-            const div = document.createElement('div');
-            div.className = 'chat-msg ' + type;
-            const span = document.createElement('span');
-            span.innerHTML = text.replace(/\n/g, '<br>');
-            div.appendChild(span);
-            messages.appendChild(div);
-            messages.scrollTop = messages.scrollHeight;
-        }
-
-        async function sendMsg() {
-            const text = input.value.trim();
-            if (!text) return;
-            addMsg(text, 'user');
-            input.value = '';
-
-            const typing = document.createElement('div');
-            typing.className = 'chat-typing';
-            typing.textContent = 'Thinking...';
-            messages.appendChild(typing);
-            messages.scrollTop = messages.scrollHeight;
-
-            try {
-                const res = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text })
-                });
-                const data = await res.json();
-                typing.remove();
-                let reply = data.response;
-                if (data.ai_powered) {
-                    reply = '&#9733; ' + reply;
-                }
-                addMsg(reply, 'bot');
-            } catch (e) {
-                typing.remove();
-                addMsg('Sorry, something went wrong. Please try again.', 'bot');
-            }
-        }
-
-        send.addEventListener('click', sendMsg);
-        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMsg(); });
-    })();
-    </script>
+    {% block scripts %}{% endblock %}
 </body>
 </html>
