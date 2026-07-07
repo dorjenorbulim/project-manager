@@ -191,7 +191,17 @@ def _ai_charter_outline(name, description, start_date=None, end_date=None, budge
     result = _empty_outline()
     for k in CHARTER_KEYS:
         if k in outline and isinstance(outline[k], list):
-            result[k] = outline[k]
+            # Milestones and risks must be dicts; coerce or skip malformed entries
+            if k == 'milestones':
+                for item in outline[k]:
+                    if isinstance(item, dict) and item.get('name'):
+                        result[k].append({'name': str(item['name']), 'weeks': int(item.get('weeks', 0)) if str(item.get('weeks','0')).isdigit() else 0})
+            elif k == 'risks':
+                for item in outline[k]:
+                    if isinstance(item, dict) and item.get('name'):
+                        result[k].append({'name': str(item['name']), 'mitigation': str(item.get('mitigation', ''))})
+            else:
+                result[k] = [str(x) for x in outline[k] if x]
     return result
 
 

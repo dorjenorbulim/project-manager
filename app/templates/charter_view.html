@@ -59,7 +59,7 @@
     <table>
         <tr><th>Milestone</th><th>Week offset</th></tr>
         {% for m in o.get('milestones', []) %}
-        <tr><td>{{ m.name }}</td><td>Week {{ m.weeks }}</td></tr>
+        <tr><td>{{ m.name if m is mapping else m }}</td><td>Week {{ m.weeks if m is mapping else '?' }}</td></tr>
         {% endfor %}
     </table>
     {% else %}
@@ -72,9 +72,13 @@
 
     <h3>Key Risks</h3>
     {% for r in o.get('risks', []) %}
+    {% if r is mapping %}
     <div class="chip chip-risk" style="display:block;margin-bottom:6px;">
         <strong>{{ r.name }}</strong>{% if r.mitigation %}: {{ r.mitigation }}{% endif %}
     </div>
+    {% else %}
+    <div class="chip chip-risk" style="display:block;margin-bottom:6px;">{{ r }}</div>
+    {% endif %}
     {% endfor %}
     {% if not o.get('risks') %}<p style="color:#86868b;">No risks listed.</p>{% endif %}
 
@@ -119,8 +123,8 @@
         <div id="milestoneRows">
             {% for m in o.get('milestones', []) %}
             <div class="ms-row" style="display:flex;gap:8px;margin-bottom:6px;">
-                <input type="text" name="milestone_name" value="{{ m.name }}" placeholder="Milestone name" style="flex:1;">
-                <input type="number" name="milestone_weeks" value="{{ m.weeks }}" placeholder="Week" style="width:90px;">
+                <input type="text" name="milestone_name" value="{{ m.name if m is mapping else m }}" placeholder="Milestone name" style="flex:1;">
+                <input type="number" name="milestone_weeks" value="{{ m.weeks if m is mapping else 0 }}" placeholder="Week" style="width:90px;">
                 <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.ms-row').remove();">x</button>
             </div>
             {% endfor %}
@@ -131,8 +135,8 @@
         <div id="riskRows">
             {% for r in o.get('risks', []) %}
             <div class="risk-row" style="display:flex;gap:8px;margin-bottom:6px;">
-                <input type="text" name="risk_name" value="{{ r.name }}" placeholder="Risk" style="flex:1;">
-                <input type="text" name="risk_mitigation" value="{{ r.mitigation }}" placeholder="Mitigation" style="flex:1;">
+                <input type="text" name="risk_name" value="{{ r.name if r is mapping else r }}" placeholder="Risk" style="flex:1;">
+                <input type="text" name="risk_mitigation" value="{{ r.mitigation if r is mapping else '' }}" placeholder="Mitigation" style="flex:1;">
                 <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.risk-row').remove();">x</button>
             </div>
             {% endfor %}

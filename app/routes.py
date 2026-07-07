@@ -154,14 +154,21 @@ def stakeholder_add(id):
         flash('Stakeholder name is required.')
         return redirect(url_for('main.charter_view', id=id))
 
+    def _safe_int(val, default=3):
+        try:
+            v = int(val)
+            return max(1, min(5, v))
+        except (ValueError, TypeError):
+            return default
+
     s = Stakeholder(
         charter_id=id,
         name=name,
         role=request.form.get('role', '').strip() or None,
         organization=request.form.get('organization', '').strip() or None,
         email=request.form.get('email', '').strip() or None,
-        interest=int(request.form.get('interest', 3)),
-        influence=int(request.form.get('influence', 3)),
+        interest=_safe_int(request.form.get('interest', 3)),
+        influence=_safe_int(request.form.get('influence', 3)),
         notes=request.form.get('notes', '').strip() or None,
     )
     db.session.add(s)
@@ -215,14 +222,13 @@ def stakeholder_update(id, sid):
     s.role = (request.form.get('role', '') or '').strip() or None
     s.organization = (request.form.get('organization', '') or '').strip() or None
     s.email = (request.form.get('email', '') or '').strip() or None
-    try:
-        s.interest = int(request.form.get('interest', s.interest))
-    except ValueError:
-        pass
-    try:
-        s.influence = int(request.form.get('influence', s.influence))
-    except ValueError:
-        pass
+    def _safe_int(val, default):
+        try:
+            return max(1, min(5, int(val)))
+        except (ValueError, TypeError):
+            return default
+    s.interest = _safe_int(request.form.get('interest', s.interest), s.interest)
+    s.influence = _safe_int(request.form.get('influence', s.influence), s.influence)
     s.notes = (request.form.get('notes', '') or '').strip() or None
     db.session.commit()
     flash(f'Stakeholder "{s.name}" updated.')
