@@ -27,10 +27,10 @@ AI_API_KEY = os.environ.get('AI_API_KEY', '')
 AI_BASE_URL = os.environ.get('AI_BASE_URL', 'https://openrouter.ai/api/v1')
 AI_MODEL = os.environ.get('AI_MODEL', 'openai/gpt-oss-120b:free')
 
-FALLBACK_MODELS = [
-    'nvidia/nemotron-3-super-120b-a12b:free',
-    'qwen/qwen3-next-80b-a3b-instruct:free',
-]
+# Render's free web services time out requests at ~30s, and OpenRouter's
+# free models often take 15-25s. Cap each AI attempt so a slow model falls
+# back to the instant local template instead of 500ing the request.
+AI_TIMEOUT = float(os.environ.get('AI_TIMEOUT', '12'))
 
 
 def is_ai_configured():
@@ -152,28 +152,28 @@ def _ai_charter_outline(name, description, start_date=None, end_date=None, budge
     ]
 
     reply = ''
-    models_to_try = [AI_MODEL] + [m for m in FALLBACK_MODELS if m != AI_MODEL]
-    for try_model in models_to_try:
-        try:
-            extra_headers = {}
-            if 'openrouter' in AI_BASE_URL:
-                extra_headers = {
-                    'HTTP-Referer': 'https://project-manager-vqcr.onrender.com',
-                    'X-Title': 'Project Manager',
-                }
-            response = client.chat.completions.create(
-                model=try_model,
-                messages=messages,
-                max_tokens=1400,
-                temperature=0.7,
-                extra_headers=extra_headers or None,
-            )
-            reply = response.choices[0].message.content or ''
-            if reply.strip():
-                break
-        except Exception as e:
-            logger.warning("Charter AI call failed for model %s: %s", try_model, e)
-            continue
+    # On Render's free tier the request timeout is ~30s, so we only attempt
+    # the primary model once. If it times out or fails, the caller falls
+    # back to the instant local template generator.
+    try:
+        extra_headers = {}
+        if 'openrouter' in AI_BASE_URL:
+            extra_headers = {
+                'HTTP-Referer': 'https://project-manager-vqcr.onrender.com',
+                'X-Title': 'Project Manager',
+            }
+        response = client.chat.completions.create(
+            model=AI_MODEL,
+            messages=messages,
+            max_tokens=1400,
+            temperature=0.7,
+            extra_headers=extra_headers or None,
+            timeout=AI_TIMEOUT,
+        )
+        reply = response.choices[0].message.content or ''
+    except Exception as e:
+        logger.warning("Charter AI call failed for model %s: %s", AI_MODEL, e)
+        raise RuntimeError("AI timed out or failed")
 
     if not reply.strip():
         raise RuntimeError("AI returned no response")
@@ -260,28 +260,26 @@ def _ai_stakeholders(name, description, outline=None):
     ]
 
     reply = ''
-    models_to_try = [AI_MODEL] + [m for m in FALLBACK_MODELS if m != AI_MODEL]
-    for try_model in models_to_try:
-        try:
-            extra_headers = {}
-            if 'openrouter' in AI_BASE_URL:
-                extra_headers = {
-                    'HTTP-Referer': 'https://project-manager-vqcr.onrender.com',
-                    'X-Title': 'Project Manager',
-                }
-            response = client.chat.completions.create(
-                model=try_model,
-                messages=messages,
-                max_tokens=900,
-                temperature=0.6,
-                extra_headers=extra_headers or None,
-            )
-            reply = response.choices[0].message.content or ''
-            if reply.strip():
-                break
-        except Exception as e:
-            logger.warning("Stakeholder AI call failed for model %s: %s", try_model, e)
-            continue
+    # Single attempt only - see comment in _ai_charter_outline.
+    try:
+        extra_headers = {}
+        if 'openrouter' in AI_BASE_URL:
+            extra_headers = {
+                'HTTP-Referer': 'https://project-manager-vqcr.onrender.com',
+                'X-Title': 'Project Manager',
+            }
+        response = client.chat.completions.create(
+            model=AI_MODEL,
+            messages=messages,
+            max_tokens=900,
+            temperature=0.6,
+            extra_headers=extra_headers or None,
+            timeout=AI_TIMEOUT,
+        )
+        reply = response.choices[0].message.content or ''
+    except Exception as e:
+        logger.warning("Stakeholder AI call failed for model %s: %s", AI_MODEL, e)
+        raise RuntimeError("AI timed out or failed")
 
     if not reply.strip():
         raise RuntimeError("AI returned no response")
