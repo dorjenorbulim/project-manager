@@ -90,12 +90,13 @@ class ProjectProposal(db.Model):
     description = db.Column(db.Text, nullable=False)
     source = db.Column(db.String(120))  # who submitted it / where it came from
 
-    # Scores 1-5 across the evaluation matrix (0 = not yet scored)
-    alignment = db.Column(db.Integer, default=0)       # strategic alignment
-    feasibility = db.Column(db.Integer, default=0)     # can we actually do it
-    impact = db.Column(db.Integer, default=0)          # value / benefit
-    risk = db.Column(db.Integer, default=0)            # risk level (5 = low risk, 1 = high risk)
-    cost = db.Column(db.Integer, default=0)            # cost efficiency (5 = low cost, 1 = high cost)
+    # Scores 1-10 across the evaluation matrix (0 = not yet scored)
+    strategic_fit = db.Column(db.Integer, default=0)       # alignment with org strategy
+    feasibility = db.Column(db.Integer, default=0)         # can we actually deliver it
+    business_value = db.Column(db.Integer, default=0)      # ROI / revenue / efficiency
+    risk_level = db.Column(db.Integer, default=0)          # INVERTED: 10 = very low risk, 1 = very high risk
+    cost_efficiency = db.Column(db.Integer, default=0)     # INVERTED: 10 = very low cost, 1 = very high cost
+    urgency = db.Column(db.Integer, default=0)             # time pressure / window of opportunity
 
     # AI-generated rationale for each score
     _rationale_json = db.Column('rationale_json', db.Text)
@@ -119,19 +120,126 @@ class ProjectProposal(db.Model):
     def rationale(self, value):
         self._rationale_json = json.dumps(value) if value else None
 
+    # Weighted scoring model - criteria and default weights (must sum to 1.0)
+    CRITERIA = ['strategic_fit', 'feasibility', 'business_value', 'risk_level', 'cost_efficiency', 'urgency']
+    CRITERIA_LABELS = {
+        'strategic_fit': 'Strategic Fit',
+        'feasibility': 'Feasibility',
+        'business_value': 'Business Value',
+        'risk_level': 'Risk Level',
+        'cost_efficiency': 'Cost Efficiency',
+        'urgency': 'Urgency',
+    }
+    CRITERIA_INVERTED = {'risk_level', 'cost_efficiency'}  # higher = better (lower risk / lower cost)
+    DEFAULT_WEIGHTS = {
+        'strategic_fit': 0.25,
+        'feasibility': 0.15,
+        'business_value': 0.25,
+        'risk_level': 0.15,
+        'cost_efficiency': 0.10,
+        'urgency': 0.10,
+    }
+
+    @classmethod
+    def get_weights(cls):
+        """Load weights from DB-backed config, falling back to defaults."""
+        cfg = ScoringConfig.get_config()
+        weights = dict(cls.DEFAULT_WEIGHTS)
+        if cfg and cfg.weights_json:
+            try:
+                stored = json.loads(cfg.weights_json)
+                for k in cls.CRITERIA:
+                    if k in stored:
+                        weights[k] = float(stored[k])
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return weights
+
     @property
-    def total_score(self):
-        """Weighted total: alignment 25%, feasibility 20%, impact 25%, risk 15%, cost 15%."""
-        if not any([self.alignment, self.feasibility, self.impact, self.risk, self.cost]):
-            return 0
-        weights = {'alignment': 0.25, 'feasibility': 0.20, 'impact': 0.25, 'risk': 0.15, 'cost': 0.15}
-        scores = {'alignment': self.alignment, 'feasibility': self.feasibility,
-                  'impact': self.impact, 'risk': self.risk, 'cost': self.cost}
-        return round(sum(scores[k] * weights[k] for k in weights), 2)
+    def scores_dict(self):
+        return {k: getattr(self, k) for k in self.CRITERIA}
 
     @property
     def is_scored(self):
-        return any([self.alignment, self.feasibility, self.impact, self.risk, self.cost])
+        return any(getattr(self, k) > 0 for k in self.CRITERIA)
+
+    @property
+    def weighted_total(self):
+        """Weighted total on the 1-10 scale."""
+        if not self.is_scored:
+            return 0
+        weights = self.get_weights()
+        scores = self.scores_dict
+        return round(sum(scores[k] * weights[k] for k in self.CRITERIA), 2)
+
+    @property
+    def total_score(self):
+        """Alias for weighted_total for template compatibility."""
+        return self.weighted_total
+
+    @property
+    def total_percentage(self):
+        """Weighted total as a percentage of the maximum possible score (10.0)."""
+        if not self.is_scored:
+            return 0
+        return round(self.weighted_total / 10.0 * 100, 1)
+
+    @property
+    def weighted_breakdown(self):
+        """Return list of (criterion, label, score, weight, contribution) for display."""
+        if not self.is_scored:
+            return []
+        weights = self.get_weights()
+        scores = self.scores_dict
+        result = []
+        for k in self.CRITERIA:
+            s = scores[k]
+            w = weights[k]
+            result.append({
+                'key': k,
+                'label': self.CRITERIA_LABELS[k],
+                'score': s,
+                'weight': w,
+                'weight_pct': round(w * 100),
+                'contribution': round(s * w, 2),
+                'inverted': k in self.CRITERIA_INVERTED,
+            })
+        return result
+
+    @property
+    def recommendation_tier(self):
+        """Categorise the proposal by its weighted percentage."""
+        pct = self.total_percentage
+        if not self.is_scored:
+            return 'unscored'
+        if pct >= 75:
+            return 'strongly_recommended'
+        if pct >= 60:
+            return 'recommended'
+        if pct >= 45:
+            return 'conditional'
+        return 'not_recommended'
+
+
+class ScoringConfig(db.Model):
+    """Singleton config for the weighted scoring model weights."""
+    id = db.Column(db.Integer, primary_key=True)
+    weights_json = db.Column(db.Text)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    @staticmethod
+    def get_config():
+        return ScoringConfig.query.first()
+
+    @staticmethod
+    def get_or_create():
+        cfg = ScoringConfig.query.first()
+        if not cfg:
+            cfg = ScoringConfig()
+            cfg.weights_json = json.dumps(ProjectProposal.DEFAULT_WEIGHTS)
+            db.session.add(cfg)
+            db.session.commit()
+        return cfg
 
 
 class Member(db.Model):

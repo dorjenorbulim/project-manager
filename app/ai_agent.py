@@ -317,75 +317,195 @@ def suggest_stakeholders(name, description, outline=None):
     return _template_stakeholders(name, description, outline)
 
 
-# ─── Project proposal scoring ─────────────────────────────────────────────
+# ─── Project proposal scoring (weighted scoring model) ────────────────────
 
-PROPOSAL_SYSTEM_PROMPT = """You are a senior project portfolio manager evaluating vague project proposals.
+PROPOSAL_SYSTEM_PROMPT = """You are a senior project portfolio manager using a weighted scoring model to evaluate project proposals.
 
-Given one or more short, vague project descriptions, score each on a 1-5 scale across five criteria:
-- alignment: how well it fits a typical organisation's strategic goals (5 = directly strategic)
-- feasibility: how realistic it is to deliver with a typical team (5 = very feasible)
-- impact: the potential value/benefit (5 = transformative)
-- risk: risk level INVERTED so 5 = low risk, 1 = high risk
-- cost: cost efficiency INVERTED so 5 = low cost, 1 = expensive
+Score each proposal on a 1-10 scale across six criteria. Be realistic and discriminating - do not default to middle scores. Use the full 1-10 range based on evidence in the description.
 
-Also provide a one-sentence rationale for each score and an overall recommendation.
+CRITERIA AND SCORING RUBRIC (1-10):
 
-Output JSON ONLY (no markdown, no prose). For a single proposal:
+1. strategic_fit (weight 25%): How well does this align with typical organisational strategy?
+   1-2: No clear strategic link, vanity project, "nice to have"
+   3-4: Tangential to strategy, unclear business driver
+   5-6: Moderately aligned, supports some goals indirectly
+   7-8: Directly supports a stated strategic goal (growth, efficiency, compliance, customer)
+   9-10: Core strategic imperative, board-level priority, competitive necessity
+
+2. feasibility (weight 15%): Can a typical team realistically deliver this?
+   1-2: Requires unknown technology, novel R&D, or capabilities the org doesn't have
+   3-4: Significant unknowns, needs new skills/hiring, complex integration
+   5-6: Achievable with some stretch, mostly known approaches, minor unknowns
+   7-8: Standard delivery, proven approaches, team has relevant experience
+   9-10: Straightforward, well-understood, minimal risk of delivery failure
+
+3. business_value (weight 25%): What is the potential return / benefit?
+   1-2: Negligible measurable benefit, cosmetic, internal preference
+   3-4: Minor efficiency gain, small audience, hard to measure
+   5-6: Moderate value, measurable efficiency or revenue, affects one department
+   7-8: Significant value, clear ROI, affects multiple departments or customers
+   9-10: Transformative, major revenue/cost/efficiency impact, organisation-wide
+
+4. risk_level (weight 15%): INVERTED - 10 = very low risk, 1 = very high risk
+   1-2: High risk - regulatory, security, unproven tech, political sensitivity
+   3-4: Elevated risk - compliance concerns, dependency on external parties, new domain
+   5-6: Moderate risk - some unknowns but manageable with standard mitigation
+   7-8: Low risk - well-understood domain, proven patterns, controllable
+   9-10: Very low risk - routine, no external dependencies, fully within control
+
+5. cost_efficiency (weight 10%): INVERTED - 10 = very low cost, 1 = very high cost
+   1-2: Very expensive - large infrastructure, enterprise licenses, big team, long timeline
+   3-4: Costly - significant new investment, multiple licenses, extended duration
+   5-6: Moderate cost - standard budget, some new spend, reasonable timeline
+   7-8: Cost-efficient - reuses existing resources, incremental, short timeline
+   9-10: Very low cost - minimal spend, internal only, quick to deliver
+
+6. urgency (weight 10%): Is there a time pressure or window of opportunity?
+   1-2: No time pressure, can wait indefinitely
+   3-4: Slight pressure, eventual need but no deadline
+   5-6: Moderate urgency, should happen this year, some competitive pressure
+   7-8: Time-sensitive, clear deadline, competitive window closing
+   9-10: Critical urgency, regulatory deadline, immediate competitive threat
+
+For each criterion provide a one-sentence rationale referencing specific evidence from the description. Then give an overall recommendation (1-2 sentences) that references the weighted strengths and weaknesses.
+
+Output JSON ONLY (no markdown, no prose):
 {
-  "alignment": <1-5>, "feasibility": <1-5>, "impact": <1-5>, "risk": <1-5>, "cost": <1-5>,
-  "rationale": {"alignment": "...", "feasibility": "...", "impact": "...", "risk": "...", "cost": "..."},
-  "recommendation": "one or two sentences"
+  "strategic_fit": <1-10>, "feasibility": <1-10>, "business_value": <1-10>,
+  "risk_level": <1-10>, "cost_efficiency": <1-10>, "urgency": <1-10>,
+  "rationale": {"strategic_fit": "...", "feasibility": "...", "business_value": "...", "risk_level": "...", "cost_efficiency": "...", "urgency": "..."},
+  "recommendation": "..."
 }"""
 
 
 def _template_score_proposal(title, description):
     """Deterministic heuristic scorer for when no AI key is configured.
-    Uses keyword analysis on the description to produce a reasonable starter score."""
-    desc = (description or '').lower()
-    text = (title + ' ' + description).lower()
+    Uses multi-signal text analysis to produce realistic, differentiated scores."""
+    text = (title + ' ' + (description or '')).lower()
+    desc_len = len(description or '')
 
-    # Heuristic keyword-based scoring
-    def _score(keywords_positive, keywords_negative, base=3):
+    def _score(positive_kw, negative_kw, context_kw=None, base=5):
+        """Multi-signal scoring: keyword presence + density + context signals."""
         score = base
-        for kw in keywords_positive:
-            if kw in text:
-                score += 1
-        for kw in keywords_negative:
-            if kw in text:
-                score -= 1
-        return max(1, min(5, score))
+        pos_hits = sum(1 for kw in positive_kw if kw in text)
+        neg_hits = sum(1 for kw in negative_kw if kw in text)
+        # Each positive keyword adds up to 1, capped at +3 from keywords
+        score += min(pos_hits, 3)
+        # Each negative keyword subtracts up to 1, capped at -3
+        score -= min(neg_hits, 3)
+        # Context adjustments
+        if context_kw:
+            ctx_hits = sum(1 for kw in context_kw if kw in text)
+            if ctx_hits > 2:
+                score += 1  # strong context signal
+        # Length signal: very short descriptions are vaguer (less confidence)
+        if desc_len < 30:
+            score -= 1
+        return max(1, min(10, score))
 
-    alignment = _score(['strategic', 'growth', 'competitive', 'market', 'customer', 'revenue', 'digital', 'transform'],
-                       ['experiment', 'nice to have', 'side'], base=3)
-    feasibility = _score(['existing', 'platform', 'api', 'integration', 'upgrade', 'website', 'app'],
-                          ['research', 'unknown', 'novel', 'breakthrough', 'r&d', 'experimental'], base=3)
-    impact = _score(['revenue', 'growth', 'efficiency', 'automation', 'scale', 'transform', 'retention'],
-                    ['minor', 'small', 'cosmetic', 'cleanup'], base=3)
-    risk = _score(['proven', 'standard', 'established', 'existing', 'stable'],
-                  ['experimental', 'cutting edge', 'regulatory', 'compliance', 'security', 'unknown'], base=3)
-    cost = _score(['existing', 'reuse', 'open source', 'internal', 'small', 'incremental'],
-                  ['enterprise', 'license', 'infrastructure', 'large scale', 'new platform'], base=3)
+    # Strategic fit: keywords indicating strategic drivers
+    strategic_fit = _score(
+        ['strategic', 'growth', 'competitive', 'market', 'customer', 'revenue',
+         'digital', 'transform', 'mission', 'vision', 'core', 'priority', 'board',
+         'compliance', 'regulatory', 'mandate', 'initiative'],
+        ['experiment', 'nice to have', 'side', 'hobby', 'pet project', 'exploratory',
+         'maybe', 'someday', 'if we have time'],
+        base=5,
+    )
+
+    # Feasibility: indicators of deliverability
+    feasibility = _score(
+        ['existing', 'platform', 'api', 'integration', 'upgrade', 'website', 'app',
+         'standard', 'proven', 'established', 'internal', 'team', 'current',
+         'extend', 'enhance', 'update', 'replace', 'migrate'],
+        ['research', 'unknown', 'novel', 'breakthrough', 'r&d', 'experimental',
+         'cutting edge', 'new technology', 'never done', 'innovative', 'ai',
+         'machine learning', 'blockchain', 'unproven'],
+        base=5,
+    )
+
+    # Business value: ROI / revenue / efficiency signals
+    business_value = _score(
+        ['revenue', 'growth', 'efficiency', 'automation', 'scale', 'transform',
+         'retention', 'cost saving', 'productivity', 'profit', 'margin', 'roi',
+         'customer satisfaction', 'competitive advantage', 'market share',
+         'impact', 'benefit'],
+        ['minor', 'small', 'cosmetic', 'cleanup', 'refactor', 'tidy', 'nice',
+         'polish', 'aesthetic', 'no clear', 'no business', 'unclear',
+         'no measurable', 'exploratory', 'research', 'r&d'],
+        base=5,
+    )
+
+    # Risk level (inverted: 10 = low risk)
+    risk_level = _score(
+        ['proven', 'standard', 'established', 'existing', 'stable', 'routine',
+         'internal', 'controlled', 'simple', 'well-known', 'documented'],
+        ['experimental', 'cutting edge', 'regulatory', 'compliance', 'security',
+         'unknown', 'external', 'third party', 'vendor', 'political', 'sensitive',
+         'privacy', 'gdpr', 'data breach'],
+        base=5,
+    )
+
+    # Cost efficiency (inverted: 10 = low cost)
+    cost_efficiency = _score(
+        ['existing', 'reuse', 'open source', 'internal', 'small', 'incremental',
+         'quick', 'minimal', 'lightweight', 'simple', 'reuse', 'extend'],
+        ['enterprise', 'license', 'infrastructure', 'large scale', 'new platform',
+         'expensive', 'big', 'major', 'transformation', ' overhaul', 'rebuild',
+         'consultant', 'vendor', 'cloud migration'],
+        base=5,
+    )
+
+    # Urgency: time pressure signals
+    urgency = _score(
+        ['urgent', 'deadline', 'asap', 'immediate', 'critical', 'now', 'this quarter',
+         'this year', 'window', 'opportunity', 'competitive', 'losing', 'falling behind',
+         'regulatory deadline', 'compliance deadline', 'compliance', 'expire',
+         'mandate', 'required', 'must'],
+        ['someday', 'eventually', 'when we have time', 'no rush', 'future', 'long term',
+         'nice to have', 'backlog', 'low priority', 'no real deadline', 'no deadline',
+         'exploratory', 'no clear'],
+        base=4,  # default lower - most proposals aren't urgent
+    )
 
     rationales = {
-        'alignment': f"{'Strong' if alignment >= 4 else 'Moderate' if alignment >= 3 else 'Weak'} strategic signal from keywords",
-        'feasibility': f"{'Looks' if feasibility >= 4 else 'May be'} achievable{'with standard approaches' if feasibility >= 4 else ', some unknowns'}",
-        'impact': f"{'High' if impact >= 4 else 'Moderate' if impact >= 3 else 'Low'} potential value based on description",
-        'risk': f"{'Low' if risk >= 4 else 'Moderate' if risk >= 3 else 'Elevated'} risk profile inferred from language",
-        'cost': f"{'Cost-efficient' if cost >= 4 else 'Moderate' if cost >= 3 else 'Potentially costly'} based on scope hints",
+        'strategic_fit': f"{'Strong' if strategic_fit >= 7 else 'Moderate' if strategic_fit >= 5 else 'Weak'} strategic signal - {'clear strategic driver keywords present' if strategic_fit >= 7 else 'limited strategic language detected' if strategic_fit >= 5 else 'no clear strategic alignment in description'}",
+        'feasibility': f"{'Highly feasible' if feasibility >= 7 else 'Achievable' if feasibility >= 5 else 'Challenging'} - {'standard approaches and existing capabilities referenced' if feasibility >= 7 else 'mostly known but some unknowns' if feasibility >= 5 else 'significant unknowns or novel elements detected'}",
+        'business_value': f"{'High value' if business_value >= 7 else 'Moderate value' if business_value >= 5 else 'Low value'} - {'clear revenue/efficiency/benefit signals' if business_value >= 7 else 'some benefit indicators' if business_value >= 5 else 'limited measurable benefit in description'}",
+        'risk_level': f"{'Low risk' if risk_level >= 7 else 'Moderate risk' if risk_level >= 5 else 'High risk'} - {'well-understood domain with proven patterns' if risk_level >= 7 else 'some risk factors present' if risk_level >= 5 else 'regulatory/technical/external risk signals detected'}",
+        'cost_efficiency': f"{'Cost-efficient' if cost_efficiency >= 7 else 'Moderate cost' if cost_efficiency >= 5 else 'Potentially costly'} - {'reuses existing resources, incremental scope' if cost_efficiency >= 7 else 'standard budget expected' if cost_efficiency >= 5 else 'major investment or new infrastructure likely'}",
+        'urgency': f"{'Time-critical' if urgency >= 7 else 'Moderate urgency' if urgency >= 5 else 'Low urgency'} - {'clear deadline or competitive pressure' if urgency >= 7 else 'some time sensitivity' if urgency >= 5 else 'no clear time pressure in description'}",
     }
-    weighted = round(alignment * 0.25 + feasibility * 0.20 + impact * 0.25 + risk * 0.15 + cost * 0.15, 1)
-    recommendation = f"Weighted score {weighted}/5. {'Prioritise' if weighted >= 3.5 else 'Consider' if weighted >= 2.5 else 'Deprioritise'} this proposal."
+
+    # Calculate weighted total
+    weights = {'strategic_fit': 0.25, 'feasibility': 0.15, 'business_value': 0.25,
+               'risk_level': 0.15, 'cost_efficiency': 0.10, 'urgency': 0.10}
+    scores = {'strategic_fit': strategic_fit, 'feasibility': feasibility,
+              'business_value': business_value, 'risk_level': risk_level,
+              'cost_efficiency': cost_efficiency, 'urgency': urgency}
+    weighted = round(sum(scores[k] * weights[k] for k in weights), 1)
+    pct = round(weighted / 10.0 * 100, 1)
+
+    if pct >= 75:
+        rec = f"Weighted score {weighted}/10 ({pct}%). Strongly recommended - clear strategic and value alignment with manageable risk."
+    elif pct >= 60:
+        rec = f"Weighted score {weighted}/10 ({pct}%). Recommended - worthwhile investment with acceptable risk profile."
+    elif pct >= 45:
+        rec = f"Weighted score {weighted}/10 ({pct}%). Conditional - viable but has notable weaknesses that need addressing before proceeding."
+    else:
+        rec = f"Weighted score {weighted}/10 ({pct}%). Not recommended in current form - significant gaps in strategic fit, value, or risk profile."
 
     return {
-        'alignment': alignment, 'feasibility': feasibility, 'impact': impact,
-        'risk': risk, 'cost': cost,
+        'strategic_fit': strategic_fit, 'feasibility': feasibility,
+        'business_value': business_value, 'risk_level': risk_level,
+        'cost_efficiency': cost_efficiency, 'urgency': urgency,
         'rationale': rationales,
-        'recommendation': recommendation,
+        'recommendation': rec,
     }
 
 
 def _ai_score_proposal(title, description):
-    """Call the configured LLM to score a proposal."""
+    """Call the configured LLM to score a proposal using the weighted scoring rubric."""
     user_brief = f"Proposal title: {title}\nDescription: {description or '(none)'}"
 
     client = OpenAI(api_key=AI_API_KEY, base_url=AI_BASE_URL)
@@ -405,8 +525,8 @@ def _ai_score_proposal(title, description):
         response = client.chat.completions.create(
             model=AI_MODEL,
             messages=messages,
-            max_tokens=600,
-            temperature=0.5,
+            max_tokens=800,
+            temperature=0.4,
             extra_headers=extra_headers or None,
             timeout=AI_TIMEOUT,
         )
@@ -426,16 +546,17 @@ def _ai_score_proposal(title, description):
         cleaned = cleaned.strip('` \n')
 
     parsed = json.loads(cleaned)
-    # Normalise scores to 1-5
+    # Normalise scores to 1-10
     result = {}
-    for k in ['alignment', 'feasibility', 'impact', 'risk', 'cost']:
+    criteria = ['strategic_fit', 'feasibility', 'business_value', 'risk_level', 'cost_efficiency', 'urgency']
+    for k in criteria:
         try:
-            result[k] = max(1, min(5, int(parsed.get(k, 3))))
+            result[k] = max(1, min(10, int(parsed.get(k, 5))))
         except (ValueError, TypeError):
-            result[k] = 3
+            result[k] = 5
     result['rationale'] = {}
     if isinstance(parsed.get('rationale'), dict):
-        for k in ['alignment', 'feasibility', 'impact', 'risk', 'cost']:
+        for k in criteria:
             result['rationale'][k] = str(parsed['rationale'].get(k, ''))
     result['recommendation'] = str(parsed.get('recommendation', ''))
     return result

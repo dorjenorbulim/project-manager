@@ -3,10 +3,39 @@
 {% block content %}
 <h1>Project Selection</h1>
 <p style="color:#86868b;margin-bottom:24px;max-width:720px;">
-    Paste vague project proposals below. Each is scored on a five-criteria evaluation matrix
-    (alignment, feasibility, impact, risk, cost), ranked by weighted total, and the top proposal
-    can be converted into a full project charter with one click.
+    Paste vague project proposals below. Each is scored on a six-criteria weighted scoring model
+    (1-10 scale), ranked by weighted total, and the top proposal can be converted into a full
+    project charter with one click.
 </p>
+
+<!-- Weight configuration panel -->
+<div class="card" id="weights" style="margin-bottom:24px;">
+    <details>
+        <summary style="cursor:pointer;font-weight:600;font-size:16px;">Weighted Scoring Model - Criteria Weights</summary>
+        <p style="color:#86868b;font-size:13px;margin:12px 0;">
+            Adjust the importance of each criterion. Weights are normalised to sum to 100%.
+            Strategic Fit and Business Value carry the most weight by default.
+        </p>
+        <form method="POST" action="/proposals/weights">
+            <div class="grid grid-3" style="gap:12px;">
+                {% for k in criteria %}
+                <div class="form-group">
+                    <label>{{ criteria_labels[k] }}</label>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <input type="number" name="{{ k }}" min="0" max="1" step="0.05" value="{{ weights[k] }}" style="flex:1;">
+                        <span style="font-size:13px;color:#86868b;min-width:40px;">{{ (weights[k] * 100)|round }}%</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <div style="margin-top:8px;font-size:13px;color:#86868b;">
+                Total: <strong>{{ (weights.values()|sum * 100)|round }}%</strong>
+                {% if (weights.values()|sum * 100)|round != 100 %}<span style="color:#ff8f00;"> (will be normalised to 100%)</span>{% endif %}
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm" style="margin-top:12px;">Save weights</button>
+        </form>
+    </details>
+</div>
 
 <!-- Add proposal form -->
 <div class="card add-form" id="addProposal" style="margin-bottom:24px;">
@@ -47,12 +76,10 @@
         <tr>
             <th>Rank</th>
             <th>Proposal</th>
-            <th>Alignment<br><span style="font-weight:400;text-transform:none;">(25%)</span></th>
-            <th>Feasibility<br><span style="font-weight:400;text-transform:none;">(20%)</span></th>
-            <th>Impact<br><span style="font-weight:400;text-transform:none;">(25%)</span></th>
-            <th>Risk<br><span style="font-weight:400;text-transform:none;">(15%)</span></th>
-            <th>Cost<br><span style="font-weight:400;text-transform:none;">(15%)</span></th>
-            <th>Total</th>
+            {% for k in criteria %}
+            <th>{{ criteria_labels[k] }}<br><span style="font-weight:400;text-transform:none;">({{ (weights[k] * 100)|round }}%)</span></th>
+            {% endfor %}
+            <th>Weighted Total</th>
             <th></th>
         </tr>
         {% for p in scored %}
@@ -63,31 +90,19 @@
             <td>
                 <strong>{{ p.title }}</strong>
                 {% if p.source %}<div style="font-size:12px;color:#86868b;">{{ p.source }}</div>{% endif %}
-                <div style="font-size:13px;color:#86868b;max-width:280px;margin-top:2px;">{{ p.description[:120] }}{% if p.description|length > 120 %}...{% endif %}</div>
+                <div style="font-size:13px;color:#86868b;max-width:260px;margin-top:2px;">{{ p.description[:120] }}{% if p.description|length > 120 %}...{% endif %}</div>
             </td>
+            {% for k in criteria %}
+            {% set s = p.scores_dict[k] %}
             <td class="score-cell">
-                <div class="score-num">{{ p.alignment }}/5</div>
-                <div class="score-bar" style="margin-top:4px;"><div class="score-fill" style="width:{{ p.alignment * 20 }}%;background:#1565c0;"></div></div>
+                <div class="score-num">{{ s }}/10</div>
+                <div class="score-bar" style="margin-top:4px;"><div class="score-fill" style="width:{{ s * 10 }}%;background:{% if k == 'risk_level' %}#7b1fa2{% elif k == 'cost_efficiency' %}#e65100{% elif k == 'strategic_fit' %}#1565c0{% elif k == 'feasibility' %}#2e7d32{% elif k == 'business_value' %}#ff8f00{% else %}#616161{% endif %};"></div></div>
             </td>
+            {% endfor %}
             <td class="score-cell">
-                <div class="score-num">{{ p.feasibility }}/5</div>
-                <div class="score-bar" style="margin-top:4px;"><div class="score-fill" style="width:{{ p.feasibility * 20 }}%;background:#2e7d32;"></div></div>
-            </td>
-            <td class="score-cell">
-                <div class="score-num">{{ p.impact }}/5</div>
-                <div class="score-bar" style="margin-top:4px;"><div class="score-fill" style="width:{{ p.impact * 20 }}%;background:#ff8f00;"></div></div>
-            </td>
-            <td class="score-cell">
-                <div class="score-num">{{ p.risk }}/5</div>
-                <div class="score-bar" style="margin-top:4px;"><div class="score-fill" style="width:{{ p.risk * 20 }}%;background:#7b1fa2;"></div></div>
-            </td>
-            <td class="score-cell">
-                <div class="score-num">{{ p.cost }}/5</div>
-                <div class="score-bar" style="margin-top:4px;"><div class="score-fill" style="width:{{ p.cost * 20 }}%;background:#e65100;"></div></div>
-            </td>
-            <td class="score-cell">
-                <div class="score-num" style="font-size:20px;{% if loop.index == 1 %}color:#2e7d32;{% endif %}">{{ p.total_score }}</div>
-                {% if loop.index == 1 %}<div style="font-size:11px;color:#4caf50;font-weight:600;">TOP</div>{% endif %}
+                <div class="score-num" style="font-size:20px;font-weight:700;{% if loop.index == 1 %}color:#2e7d32;{% endif %}">{{ p.weighted_total }}/10</div>
+                <div style="font-size:12px;color:#86868b;margin-top:2px;">{{ p.total_percentage }}%</div>
+                {% if loop.index == 1 %}<div style="font-size:11px;color:#4caf50;font-weight:600;margin-top:2px;">TOP</div>{% endif %}
             </td>
             <td>
                 <div style="display:flex;flex-direction:column;gap:4px;">
@@ -105,8 +120,11 @@
     </table>
 </div>
 
-<!-- Detailed cards -->
+<!-- Detailed cards with weighted contribution breakdown -->
 {% for p in scored %}
+{% set tier = p.recommendation_tier %}
+{% set tier_color = {'strongly_recommended': '#2e7d32', 'recommended': '#1565c0', 'conditional': '#ff8f00', 'not_recommended': '#c62828', 'unscored': '#86868b'} %}
+{% set tier_label = {'strongly_recommended': 'Strongly Recommended', 'recommended': 'Recommended', 'conditional': 'Conditional', 'not_recommended': 'Not Recommended', 'unscored': 'Unscored'} %}
 <div id="detail-{{ p.id }}" class="card" style="display:none;margin-bottom:16px;{% if loop.index == 1 %}border:2px solid #4caf50;{% endif %}">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
         <div>
@@ -118,41 +136,46 @@
             {% if p.source %}<div style="font-size:13px;color:#86868b;">Source: {{ p.source }}</div>{% endif %}
             <p style="margin-top:8px;color:#555;">{{ p.description }}</p>
         </div>
-        <button type="button" class="btn btn-sm" style="background:#f0f0f5;" onclick="toggleDetail({{ p.id }})">Close</button>
+        <div style="text-align:right;">
+            <button type="button" class="btn btn-sm" style="background:#f0f0f5;" onclick="toggleDetail({{ p.id }})">Close</button>
+            <div style="margin-top:8px;">
+                <div style="font-size:28px;font-weight:700;color:{{ tier_color[tier] }};">{{ p.weighted_total }}/10</div>
+                <div style="font-size:14px;color:{{ tier_color[tier] }};font-weight:600;">{{ p.total_percentage }}%</div>
+                <div class="badge" style="background:{{ tier_color[tier] }};color:#fff;margin-top:4px;">{{ tier_label[tier] }}</div>
+            </div>
+        </div>
     </div>
 
     {% set r = p.rationale %}
-    <div class="grid grid-2" style="gap:16px;margin-bottom:16px;">
-        <div>
-            <strong>Alignment ({{ p.alignment }}/5)</strong>
-            <div class="score-bar" style="margin:6px 0;"><div class="score-fill" style="width:{{ p.alignment * 20 }}%;background:#1565c0;"></div></div>
-            <p style="font-size:13px;color:#555;">{{ r.get('alignment', '') if r else '' }}</p>
-        </div>
-        <div>
-            <strong>Feasibility ({{ p.feasibility }}/5)</strong>
-            <div class="score-bar" style="margin:6px 0;"><div class="score-fill" style="width:{{ p.feasibility * 20 }}%;background:#2e7d32;"></div></div>
-            <p style="font-size:13px;color:#555;">{{ r.get('feasibility', '') if r else '' }}</p>
-        </div>
-        <div>
-            <strong>Impact ({{ p.impact }}/5)</strong>
-            <div class="score-bar" style="margin:6px 0;"><div class="score-fill" style="width:{{ p.impact * 20 }}%;background:#ff8f00;"></div></div>
-            <p style="font-size:13px;color:#555;">{{ r.get('impact', '') if r else '' }}</p>
-        </div>
-        <div>
-            <strong>Risk - lower is riskier ({{ p.risk }}/5)</strong>
-            <div class="score-bar" style="margin:6px 0;"><div class="score-fill" style="width:{{ p.risk * 20 }}%;background:#7b1fa2;"></div></div>
-            <p style="font-size:13px;color:#555;">{{ r.get('risk', '') if r else '' }}</p>
-        </div>
-        <div>
-            <strong>Cost - lower is pricier ({{ p.cost }}/5)</strong>
-            <div class="score-bar" style="margin:6px 0;"><div class="score-fill" style="width:{{ p.cost * 20 }}%;background:#e65100;"></div></div>
-            <p style="font-size:13px;color:#555;">{{ r.get('cost', '') if r else '' }}</p>
-        </div>
-        <div>
-            <strong>Weighted total</strong>
-            <div style="font-size:28px;font-weight:700;color:{% if p.total_score >= 3.5 %}#2e7d32{% elif p.total_score >= 2.5 %}#ff8f00{% else %}#c62828{% endif %};">{{ p.total_score }}/5.0</div>
-        </div>
-    </div>
+    <!-- Weighted contribution breakdown -->
+    <h3 style="margin-bottom:8px;">Weighted Score Breakdown</h3>
+    <table style="margin-bottom:16px;">
+        <tr>
+            <th>Criterion</th><th>Score</th><th>Weight</th><th>Contribution</th><th>Visual</th>
+        </tr>
+        {% for item in p.weighted_breakdown %}
+        <tr>
+            <td>
+                <strong>{{ item.label }}</strong>
+                {% if item.inverted %}<span style="font-size:11px;color:#86868b;">(inverted)</span>{% endif %}
+                {% if r and r.get(item.key) %}<div style="font-size:12px;color:#86868b;max-width:300px;margin-top:2px;">{{ r[item.key] }}</div>{% endif %}
+            </td>
+            <td class="score-cell"><span class="score-num">{{ item.score }}/10</span></td>
+            <td class="score-cell">{{ item.weight_pct }}%</td>
+            <td class="score-cell"><strong>{{ item.contribution }}</strong></td>
+            <td style="width:120px;">
+                <div class="score-bar"><div class="score-fill" style="width:{{ item.score * 10 }}%;background:{% if item.key == 'risk_level' %}#7b1fa2{% elif item.key == 'cost_efficiency' %}#e65100{% elif item.key == 'strategic_fit' %}#1565c0{% elif item.key == 'feasibility' %}#2e7d32{% elif item.key == 'business_value' %}#ff8f00{% else %}#616161{% endif %};"></div></div>
+            </td>
+        </tr>
+        {% endfor %}
+        <tr style="border-top:2px solid #f0f0f0;">
+            <td><strong>Weighted Total</strong></td>
+            <td></td>
+            <td class="score-cell">100%</td>
+            <td class="score-cell"><strong style="font-size:18px;color:{{ tier_color[tier] }};">{{ p.weighted_total }}/10</strong></td>
+            <td></td>
+        </tr>
+    </table>
 
     {% if p.recommendation %}
     <div class="card" style="background:#fafafa;padding:12px;margin-bottom:16px;">
@@ -162,29 +185,15 @@
 
     <!-- Manual score override -->
     <details>
-        <summary style="cursor:pointer;font-weight:600;margin-bottom:8px;">Manually adjust scores</summary>
+        <summary style="cursor:pointer;font-weight:600;margin-bottom:8px;">Manually adjust scores (1-10)</summary>
         <form method="POST" action="/proposals/{{ p.id }}/update-scores" style="margin-top:12px;">
-            <div class="grid grid-5" style="gap:12px;grid-template-columns:repeat(5,1fr);">
+            <div class="grid grid-3" style="gap:12px;grid-template-columns:repeat(3,1fr);">
+                {% for k in criteria %}
                 <div class="form-group">
-                    <label>Alignment</label>
-                    <input type="number" name="alignment" min="0" max="5" value="{{ p.alignment }}">
+                    <label>{{ criteria_labels[k] }}</label>
+                    <input type="number" name="{{ k }}" min="0" max="10" value="{{ p.scores_dict[k] }}">
                 </div>
-                <div class="form-group">
-                    <label>Feasibility</label>
-                    <input type="number" name="feasibility" min="0" max="5" value="{{ p.feasibility }}">
-                </div>
-                <div class="form-group">
-                    <label>Impact</label>
-                    <input type="number" name="impact" min="0" max="5" value="{{ p.impact }}">
-                </div>
-                <div class="form-group">
-                    <label>Risk</label>
-                    <input type="number" name="risk" min="0" max="5" value="{{ p.risk }}">
-                </div>
-                <div class="form-group">
-                    <label>Cost</label>
-                    <input type="number" name="cost" min="0" max="5" value="{{ p.cost }}">
-                </div>
+                {% endfor %}
             </div>
             <button type="submit" class="btn btn-sm btn-primary">Save manual scores</button>
         </form>
@@ -192,7 +201,7 @@
 
     <div style="display:flex;gap:8px;margin-top:16px;">
         <form method="POST" action="/proposals/{{ p.id }}/score" style="display:inline;">
-            <button type="submit" class="btn btn-sm" style="background:#f0f0f5;">Re-score with AI</button>
+            <button type="submit" class="btn btn-sm" style="background:#f0f0f5;">Re-score</button>
         </form>
         <form method="POST" action="/proposals/{{ p.id }}/convert" style="display:inline;" onsubmit="return confirm('Convert this proposal into a full project charter?');">
             <button type="submit" class="btn btn-sm" style="background:#4caf50;color:#fff;">{% if p.charter_id %}Re-convert to Charter{% else %}Convert to Charter{% endif %}</button>
@@ -232,7 +241,7 @@
 {% else %}
 <div class="card" style="text-align:center;padding:48px;">
     <p style="color:#86868b;margin-bottom:16px;">No project proposals yet.</p>
-    <p style="color:#86868b;font-size:13px;">Add vague project descriptions above. They'll be scored and ranked so you can pick the best one to pursue.</p>
+    <p style="color:#86868b;font-size:13px;">Add vague project descriptions above. They'll be scored and ranked using the weighted scoring model so you can pick the best one to pursue.</p>
 </div>
 {% endif %}
 {% endblock %}

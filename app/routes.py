@@ -1,7 +1,8 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from app import db
-from app.models import Member, Milestone, Task, BudgetCategory, Expense, Contribution, ProjectCharter, Stakeholder, ProjectProposal
+from app.models import Member, Milestone, Task, BudgetCategory, Expense, Contribution, ProjectCharter, Stakeholder, ProjectProposal, ScoringConfig
 from datetime import datetime, date, timedelta
+import json
 
 bp = Blueprint('main', __name__)
 
@@ -253,10 +254,13 @@ def stakeholder_delete(id, sid):
 @bp.route('/proposals')
 def proposal_list():
     proposals = ProjectProposal.query.order_by(ProjectProposal.created_at.desc()).all()
-    # Sorted view: scored proposals by total_score desc, unscored at the end
-    scored = sorted([p for p in proposals if p.is_scored], key=lambda p: p.total_score, reverse=True)
+    scored = sorted([p for p in proposals if p.is_scored], key=lambda p: p.weighted_total, reverse=True)
     unscored = [p for p in proposals if not p.is_scored]
-    return render_template('proposals.html', proposals=proposals, scored=scored, unscored=unscored)
+    weights = ProjectProposal.get_weights()
+    return render_template('proposals.html', proposals=proposals, scored=scored,
+                           unscored=unscored, weights=weights,
+                           criteria=ProjectProposal.CRITERIA,
+                           criteria_labels=ProjectProposal.CRITERIA_LABELS)
 
 
 @bp.route('/proposals/add', methods=['POST'])
@@ -279,37 +283,64 @@ def proposal_add():
     return redirect(url_for('main.proposal_list') + '#proposals')
 
 
+@bp.route('/proposals/weights', methods=['POST'])
+def proposal_update_weights():
+    """Update the weighted scoring model criteria weights."""
+    cfg = ScoringConfig.get_or_create()
+    weights = {}
+    total = 0
+    for k in ProjectProposal.CRITERIA:
+        try:
+            w = float(request.form.get(k, ProjectProposal.DEFAULT_WEIGHTS[k]))
+            w = max(0, min(1, w))
+        except (ValueError, TypeError):
+            w = ProjectProposal.DEFAULT_WEIGHTS[k]
+        weights[k] = w
+        total += w
+    # Normalise so weights sum to 1.0
+    if total > 0:
+        weights = {k: round(v / total, 4) for k, v in weights.items()}
+    else:
+        weights = dict(ProjectProposal.DEFAULT_WEIGHTS)
+    cfg.weights_json = json.dumps(weights)
+    db.session.commit()
+    flash('Scoring weights updated and normalised.')
+    return redirect(url_for('main.proposal_list') + '#weights')
+
+
 @bp.route('/proposals/<int:id>/score', methods=['POST'])
 def proposal_score(id):
     from app.ai_agent import score_proposal
     p = ProjectProposal.query.get_or_404(id)
 
     result = score_proposal(p.title, p.description)
-    p.alignment = result['alignment']
+    p.strategic_fit = result['strategic_fit']
     p.feasibility = result['feasibility']
-    p.impact = result['impact']
-    p.risk = result['risk']
-    p.cost = result['cost']
+    p.business_value = result['business_value']
+    p.risk_level = result['risk_level']
+    p.cost_efficiency = result['cost_efficiency']
+    p.urgency = result['urgency']
     p.rationale = result.get('rationale', {})
     p.recommendation = result.get('recommendation', '')
     db.session.commit()
-    flash(f'Proposal "{p.title}" scored: {p.total_score}/5.0')
+    flash(f'Proposal "{p.title}" scored: {p.weighted_total}/10 ({p.total_percentage}%)')
     return redirect(url_for('main.proposal_list') + '#proposals')
 
 
 @bp.route('/proposals/score-all', methods=['POST'])
 def proposal_score_all():
     from app.ai_agent import score_proposal
-    proposals = ProjectProposal.query.filter_by(alignment=0).all()
+    proposals = ProjectProposal.query.filter_by(strategic_fit=0).all()
     count = 0
     for p in proposals:
         try:
             result = score_proposal(p.title, p.description)
-            p.alignment = result['alignment']
+            p.strategic_fit = result['strategic_fit']
             p.feasibility = result['feasibility']
-            p.impact = result['impact']
-            p.risk = result['risk']
-            p.cost = result['cost']
+            p.business_value = result['business_value']
+            p.risk_level = result['risk_level']
+            p.cost_efficiency = result['cost_efficiency']
+            p.urgency = result['urgency']
             p.rationale = result.get('rationale', {})
             p.recommendation = result.get('recommendation', '')
             count += 1
@@ -326,17 +357,18 @@ def proposal_update_scores(id):
 
     def _safe_int(val, default=0):
         try:
-            return max(0, min(5, int(val)))
+            return max(0, min(10, int(val)))
         except (ValueError, TypeError):
             return default
 
-    p.alignment = _safe_int(request.form.get('alignment', 0))
+    p.strategic_fit = _safe_int(request.form.get('strategic_fit', 0))
     p.feasibility = _safe_int(request.form.get('feasibility', 0))
-    p.impact = _safe_int(request.form.get('impact', 0))
-    p.risk = _safe_int(request.form.get('risk', 0))
-    p.cost = _safe_int(request.form.get('cost', 0))
+    p.business_value = _safe_int(request.form.get('business_value', 0))
+    p.risk_level = _safe_int(request.form.get('risk_level', 0))
+    p.cost_efficiency = _safe_int(request.form.get('cost_efficiency', 0))
+    p.urgency = _safe_int(request.form.get('urgency', 0))
     db.session.commit()
-    flash(f'Scores updated for "{p.title}".')
+    flash(f'Scores updated for "{p.title}": {p.weighted_total}/10 ({p.total_percentage}%)')
     return redirect(url_for('main.proposal_list') + '#proposals')
 
 
