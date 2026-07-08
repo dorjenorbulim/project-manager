@@ -746,3 +746,278 @@ def quick_options():
         'milestones': [{'id': m.id, 'name': m.name} for m in Milestone.query.order_by(Milestone.deadline).all()],
         'categories': [{'id': c.id, 'name': c.name, 'allocated': c.allocated} for c in BudgetCategory.query.all()],
     })
+
+
+# ─── Bulk multi-add + contribution logging ─────────────────
+
+@bp.route('/api/quick/members/bulk', methods=['POST'])
+def quick_bulk_members():
+    """Add multiple members from line-separated text.
+    Each line: 'Name' or 'Name, Role' or 'Name, Role, email@...'"""
+    data = request.get_json(silent=True) or {}
+    lines = (data.get('lines') or '').strip().split('\n')
+    added, errors = [], []
+    for i, line in enumerate(lines, 1):
+        line = line.strip()
+        if not line:
+            continue
+        parts = [p.strip() for p in line.split(',')]
+        name = parts[0] if parts else ''
+        role = parts[1] if len(parts) > 1 else ''
+        email = parts[2] if len(parts) > 2 else ''
+        if not name:
+            errors.append(f'Line {i}: missing name')
+            continue
+        m = Member(name=name[:100], role=role[:100], email=email[:120])
+        db.session.add(m)
+        added.append(name)
+    if added:
+        db.session.commit()
+    msg = f'Added {len(added)} member(s).' if added else 'No members added.'
+    if errors:
+        msg += f' {len(errors)} error(s): ' + '; '.join(errors[:3])
+    return jsonify({'success': len(added) > 0, 'message': msg, 'count': len(added)})
+
+
+@bp.route('/api/quick/milestones/bulk', methods=['POST'])
+def quick_bulk_milestones():
+    """Add multiple milestones. Each line: 'Name, YYYY-MM-DD' or 'Name, YYYY-MM-DD, YYYY-MM-DD(start)'"""
+    data = request.get_json(silent=True) or {}
+    lines = (data.get('lines') or '').strip().split('\n')
+    added, errors = [], []
+    for i, line in enumerate(lines, 1):
+        line = line.strip()
+        if not line:
+            continue
+        parts = [p.strip() for p in line.split(',')]
+        name = parts[0] if parts else ''
+        if not name:
+            errors.append(f'Line {i}: missing name')
+            continue
+        deadline_str = parts[1] if len(parts) > 1 else ''
+        if not deadline_str:
+            errors.append(f'Line {i}: {name} - missing deadline')
+            continue
+        try:
+            deadline = datetime.strptime(deadline_str, '%Y-%m-%d').date()
+        except ValueError:
+            errors.append(f'Line {i}: {name} - invalid deadline')
+            continue
+        start_date = None
+        if len(parts) > 2 and parts[2]:
+            try:
+                start_date = datetime.strptime(parts[2], '%Y-%m-%d').date()
+            except ValueError:
+                pass  # optional, ignore bad start date
+        ms = Milestone(name=name[:200], deadline=deadline, start_date=start_date)
+        db.session.add(ms)
+        added.append(name)
+    if added:
+        db.session.commit()
+    msg = f'Added {len(added)} milestone(s).' if added else 'No milestones added.'
+    if errors:
+        msg += f' {len(errors)} error(s): ' + '; '.join(errors[:3])
+    return jsonify({'success': len(added) > 0, 'message': msg, 'count': len(added)})
+
+
+@bp.route('/api/quick/tasks/bulk', methods=['POST'])
+def quick_bulk_tasks():
+    """Add multiple tasks. Each line: 'Title' or 'Title, priority' or 'Title, priority, YYYY-MM-DD'"""
+    data = request.get_json(silent=True) or {}
+    lines = (data.get('lines') or '').strip().split('\n')
+    default_priority = (data.get('default_priority') or 'medium').strip()
+    default_milestone = data.get('default_milestone_id')
+    default_assignee = data.get('default_assignee_id')
+    if default_priority not in ('low', 'medium', 'high'):
+        default_priority = 'medium'
+    added, errors = [], []
+    for i, line in enumerate(lines, 1):
+        line = line.strip()
+        if not line:
+            continue
+        parts = [p.strip() for p in line.split(',')]
+        title = parts[0] if parts else ''
+        if not title:
+            errors.append(f'Line {i}: missing title')
+            continue
+        priority = parts[1] if len(parts) > 1 and parts[1] in ('low', 'medium', 'high') else default_priority
+        due = None
+        if len(parts) > 2 and parts[2]:
+            try:
+                due = datetime.strptime(parts[2], '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        milestone_id = int(default_milestone) if default_milestone else None
+        assignee_id = int(default_assignee) if default_assignee else None
+        t = Task(title=title[:200], priority=priority, due_date=due, milestone_id=milestone_id, assignee_id=assignee_id)
+        db.session.add(t)
+        added.append(title)
+    if added:
+        db.session.commit()
+    msg = f'Added {len(added)} task(s).' if added else 'No tasks added.'
+    if errors:
+        msg += f' {len(errors)} error(s): ' + '; '.join(errors[:3])
+    return jsonify({'success': len(added) > 0, 'message': msg, 'count': len(added)})
+
+
+@bp.route('/api/quick/categories/bulk', methods=['POST'])
+def quick_bulk_categories():
+    """Add multiple budget categories. Each line: 'Name' or 'Name, amount'"""
+    data = request.get_json(silent=True) or {}
+    lines = (data.get('lines') or '').strip().split('\n')
+    added, errors = [], []
+    for i, line in enumerate(lines, 1):
+        line = line.strip()
+        if not line:
+            continue
+        parts = [p.strip() for p in line.split(',')]
+        name = parts[0] if parts else ''
+        if not name:
+            errors.append(f'Line {i}: missing name')
+            continue
+        allocated = 0
+        if len(parts) > 1 and parts[1]:
+            try:
+                allocated = float(parts[1].replace('$', ''))
+            except ValueError:
+                errors.append(f'Line {i}: {name} - invalid amount')
+                continue
+        cat = BudgetCategory(name=name[:100], allocated=allocated)
+        db.session.add(cat)
+        added.append(name)
+    if added:
+        db.session.commit()
+    msg = f'Added {len(added)} categor(ies).' if added else 'No categories added.'
+    if errors:
+        msg += f' {len(errors)} error(s): ' + '; '.join(errors[:3])
+    return jsonify({'success': len(added) > 0, 'message': msg, 'count': len(added)})
+
+
+@bp.route('/api/quick/expenses/bulk', methods=['POST'])
+def quick_bulk_expenses():
+    """Add multiple expenses. Each line: 'Description, amount' or 'Description, amount, category_name'
+    If category_name not given, uses default_category_id."""
+    data = request.get_json(silent=True) or {}
+    lines = (data.get('lines') or '').strip().split('\n')
+    default_cat_id = data.get('default_category_id')
+    added, errors = [], []
+    for i, line in enumerate(lines, 1):
+        line = line.strip()
+        if not line:
+            continue
+        parts = [p.strip() for p in line.split(',')]
+        desc = parts[0] if parts else ''
+        if not desc:
+            errors.append(f'Line {i}: missing description')
+            continue
+        amount = 0
+        if len(parts) > 1 and parts[1]:
+            try:
+                amount = float(parts[1].replace('$', ''))
+            except ValueError:
+                errors.append(f'Line {i}: {desc} - invalid amount')
+                continue
+        if amount <= 0:
+            errors.append(f'Line {i}: {desc} - amount must be > 0')
+            continue
+        # Category: per-line name or default
+        cat = None
+        if len(parts) > 2 and parts[2]:
+            cat = BudgetCategory.query.filter(BudgetCategory.name.ilike(f'%{parts[2]}%')).first()
+        if not cat and default_cat_id:
+            try:
+                cat = BudgetCategory.query.get(int(default_cat_id))
+            except (ValueError, TypeError):
+                pass
+        if not cat:
+            errors.append(f'Line {i}: {desc} - no category found')
+            continue
+        exp = Expense(description=desc[:200], amount=amount, category_id=cat.id, date=date.today())
+        db.session.add(exp)
+        added.append(desc)
+    if added:
+        db.session.commit()
+    msg = f'Added {len(added)} expense(s).' if added else 'No expenses added.'
+    if errors:
+        msg += f' {len(errors)} error(s): ' + '; '.join(errors[:3])
+    return jsonify({'success': len(added) > 0, 'message': msg, 'count': len(added)})
+
+
+@bp.route('/api/quick/contributions', methods=['POST'])
+def quick_add_contribution():
+    """Log a single contribution (hours for a member)."""
+    data = request.get_json(silent=True) or {}
+    try:
+        member_id = int(data.get('member_id', 0))
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'message': 'Invalid member.'})
+    member = Member.query.get(member_id)
+    if not member:
+        return jsonify({'success': False, 'message': 'Member not found.'})
+    try:
+        hours = float(data.get('hours', 0))
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'message': 'Invalid hours.'})
+    if hours <= 0:
+        return jsonify({'success': False, 'message': 'Hours must be greater than 0.'})
+    description = (data.get('description') or '').strip()
+    date_str = (data.get('date') or '').strip()
+    c_date = date.today()
+    if date_str:
+        try:
+            c_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'success': False, 'message': 'Invalid date.'})
+    c = Contribution(member_id=member_id, hours=hours, description=description, date=c_date)
+    db.session.add(c)
+    db.session.commit()
+    return jsonify({'success': True, 'message': f'Logged {hours}h for "{member.name}".', 'item': {'id': c.id, 'member': member.name, 'hours': hours}})
+
+
+@bp.route('/api/quick/contributions/bulk', methods=['POST'])
+def quick_bulk_contributions():
+    """Add multiple contributions. Each line: 'Member name, hours' or 'Member name, hours, description'
+    Member name is matched case-insensitively (partial match)."""
+    data = request.get_json(silent=True) or {}
+    lines = (data.get('lines') or '').strip().split('\n')
+    default_date = (data.get('default_date') or '').strip()
+    c_date = date.today()
+    if default_date:
+        try:
+            c_date = datetime.strptime(default_date, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    added, errors = [], []
+    for i, line in enumerate(lines, 1):
+        line = line.strip()
+        if not line:
+            continue
+        parts = [p.strip() for p in line.split(',')]
+        member_name = parts[0] if parts else ''
+        if not member_name:
+            errors.append(f'Line {i}: missing member name')
+            continue
+        member = Member.query.filter(Member.name.ilike(f'%{member_name}%')).first()
+        if not member:
+            errors.append(f'Line {i}: "{member_name}" - member not found')
+            continue
+        hours = 0
+        if len(parts) > 1 and parts[1]:
+            try:
+                hours = float(parts[1])
+            except ValueError:
+                errors.append(f'Line {i}: {member_name} - invalid hours')
+                continue
+        if hours <= 0:
+            errors.append(f'Line {i}: {member_name} - hours must be > 0')
+            continue
+        description = parts[2] if len(parts) > 2 else ''
+        c = Contribution(member_id=member.id, hours=hours, description=description, date=c_date)
+        db.session.add(c)
+        added.append(f'{member.name} ({hours}h)')
+    if added:
+        db.session.commit()
+    msg = f'Logged {len(added)} contribution(s).' if added else 'No contributions logged.'
+    if errors:
+        msg += f' {len(errors)} error(s): ' + '; '.join(errors[:3])
+    return jsonify({'success': len(added) > 0, 'message': msg, 'count': len(added)})

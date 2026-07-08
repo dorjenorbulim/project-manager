@@ -171,7 +171,10 @@
     <div class="qa-window" id="qaWindow">
         <div class="qa-header">
             <span>Quick Add</span>
-            <button id="qaClose">&times;</button>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <label style="font-size:12px;font-weight:400;opacity:.8;cursor:pointer;"><input type="checkbox" id="qaMultiMode" style="margin-right:4px;">Multi</label>
+                <button id="qaClose">&times;</button>
+            </div>
         </div>
         <div class="qa-tabs">
             <button class="qa-tab active" data-tab="members">Members</button>
@@ -179,76 +182,160 @@
             <button class="qa-tab" data-tab="tasks">Tasks</button>
             <button class="qa-tab" data-tab="budget">Budget</button>
             <button class="qa-tab" data-tab="expenses">Expenses</button>
+            <button class="qa-tab" data-tab="contributions">Hours</button>
         </div>
         <div class="qa-body">
             <!-- Members panel -->
             <div class="qa-panel active" data-panel="members">
-                <form id="qaFormMembers" onsubmit="return false;">
-                    <div class="form-group"><label>Name *</label><input type="text" name="name" placeholder="e.g. Alice Wong" required></div>
-                    <div class="qa-grid-2">
-                        <div class="form-group"><label>Role</label><input type="text" name="role" placeholder="e.g. Developer"></div>
-                        <div class="form-group"><label>Email</label><input type="email" name="email" placeholder="optional"></div>
-                    </div>
-                    <button type="submit" class="qa-btn">Add member</button>
-                </form>
+                <div class="qa-single">
+                    <form id="qaFormMembers" onsubmit="return false;">
+                        <div class="form-group"><label>Name *</label><input type="text" name="name" placeholder="e.g. Alice Wong" required></div>
+                        <div class="qa-grid-2">
+                            <div class="form-group"><label>Role</label><input type="text" name="role" placeholder="e.g. Developer"></div>
+                            <div class="form-group"><label>Email</label><input type="email" name="email" placeholder="optional"></div>
+                        </div>
+                        <button type="submit" class="qa-btn">Add member</button>
+                    </form>
+                </div>
+                <div class="qa-multi" style="display:none;">
+                    <form id="qaFormMembersBulk" onsubmit="return false;">
+                        <div class="form-group"><label>One per line: Name, Role, Email</label><textarea name="lines" placeholder="Alice Wong, Developer, alice@test.com&#10;Bob Smith, Designer&#10;Carol Jones, QA Lead" rows="5"></textarea></div>
+                        <button type="submit" class="qa-btn">Add all members</button>
+                    </form>
+                </div>
             </div>
             <!-- Milestones panel -->
             <div class="qa-panel" data-panel="milestones">
-                <form id="qaFormMilestones" onsubmit="return false;">
-                    <div class="form-group"><label>Name *</label><input type="text" name="name" placeholder="e.g. Sprint 1" required></div>
-                    <div class="form-group"><label>Description</label><input type="text" name="description" placeholder="optional"></div>
-                    <div class="qa-grid-2">
-                        <div class="form-group"><label>Start date</label><input type="date" name="start_date"></div>
-                        <div class="form-group"><label>Deadline *</label><input type="date" name="deadline" required></div>
-                    </div>
-                    <button type="submit" class="qa-btn">Add milestone</button>
-                </form>
+                <div class="qa-single">
+                    <form id="qaFormMilestones" onsubmit="return false;">
+                        <div class="form-group"><label>Name *</label><input type="text" name="name" placeholder="e.g. Sprint 1" required></div>
+                        <div class="form-group"><label>Description</label><input type="text" name="description" placeholder="optional"></div>
+                        <div class="qa-grid-2">
+                            <div class="form-group"><label>Start date</label><input type="date" name="start_date"></div>
+                            <div class="form-group"><label>Deadline *</label><input type="date" name="deadline" required></div>
+                        </div>
+                        <button type="submit" class="qa-btn">Add milestone</button>
+                    </form>
+                </div>
+                <div class="qa-multi" style="display:none;">
+                    <form id="qaFormMilestonesBulk" onsubmit="return false;">
+                        <div class="form-group"><label>One per line: Name, Deadline (YYYY-MM-DD), Start date</label><textarea name="lines" placeholder="Sprint 1, 2026-06-30&#10;Sprint 2, 2026-08-15, 2026-07-01&#10;UAT, 2026-09-01" rows="5"></textarea></div>
+                        <button type="submit" class="qa-btn">Add all milestones</button>
+                    </form>
+                </div>
             </div>
             <!-- Tasks panel -->
             <div class="qa-panel" data-panel="tasks">
-                <form id="qaFormTasks" onsubmit="return false;">
-                    <div class="form-group"><label>Title *</label><input type="text" name="title" placeholder="e.g. Build API" required></div>
-                    <div class="qa-grid-2">
-                        <div class="form-group">
-                            <label>Priority</label>
-                            <select name="priority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select>
+                <div class="qa-single">
+                    <form id="qaFormTasks" onsubmit="return false;">
+                        <div class="form-group"><label>Title *</label><input type="text" name="title" placeholder="e.g. Build API" required></div>
+                        <div class="qa-grid-2">
+                            <div class="form-group">
+                                <label>Priority</label>
+                                <select name="priority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select>
+                            </div>
+                            <div class="form-group"><label>Due date</label><input type="date" name="due_date"></div>
                         </div>
-                        <div class="form-group"><label>Due date</label><input type="date" name="due_date"></div>
-                    </div>
-                    <div class="form-group">
-                        <label>Milestone</label>
-                        <select name="milestone_id" id="qaTaskMilestone"><option value="">None</option></select>
-                    </div>
-                    <div class="form-group">
-                        <label>Assignee</label>
-                        <select name="assignee_id" id="qaTaskAssignee"><option value="">Unassigned</option></select>
-                    </div>
-                    <button type="submit" class="qa-btn">Add task</button>
-                </form>
+                        <div class="form-group">
+                            <label>Milestone</label>
+                            <select name="milestone_id" id="qaTaskMilestone"><option value="">None</option></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Assignee</label>
+                            <select name="assignee_id" id="qaTaskAssignee"><option value="">Unassigned</option></select>
+                        </div>
+                        <button type="submit" class="qa-btn">Add task</button>
+                    </form>
+                </div>
+                <div class="qa-multi" style="display:none;">
+                    <form id="qaFormTasksBulk" onsubmit="return false;">
+                        <div class="qa-grid-2">
+                            <div class="form-group">
+                                <label>Default priority</label>
+                                <select name="default_priority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select>
+                            </div>
+                            <div class="form-group"><label>Default due date</label><input type="date" name="default_due_date"></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Default milestone</label>
+                            <select name="default_milestone_id" id="qaBulkTaskMilestone"><option value="">None</option></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Default assignee</label>
+                            <select name="default_assignee_id" id="qaBulkTaskAssignee"><option value="">Unassigned</option></select>
+                        </div>
+                        <div class="form-group"><label>One per line: Title, Priority (low/medium/high), Due date (YYYY-MM-DD)</label><textarea name="lines" placeholder="Build API, high, 2026-06-01&#10;Write tests, medium&#10;Deploy to staging" rows="5"></textarea></div>
+                        <button type="submit" class="qa-btn">Add all tasks</button>
+                    </form>
+                </div>
             </div>
             <!-- Budget categories panel -->
             <div class="qa-panel" data-panel="budget">
-                <form id="qaFormBudget" onsubmit="return false;">
-                    <div class="form-group"><label>Category name *</label><input type="text" name="name" placeholder="e.g. Software" required></div>
-                    <div class="form-group"><label>Allocated ($)</label><input type="number" name="allocated" step="0.01" min="0" placeholder="0.00"></div>
-                    <button type="submit" class="qa-btn">Add category</button>
-                </form>
+                <div class="qa-single">
+                    <form id="qaFormBudget" onsubmit="return false;">
+                        <div class="form-group"><label>Category name *</label><input type="text" name="name" placeholder="e.g. Software" required></div>
+                        <div class="form-group"><label>Allocated ($)</label><input type="number" name="allocated" step="0.01" min="0" placeholder="0.00"></div>
+                        <button type="submit" class="qa-btn">Add category</button>
+                    </form>
+                </div>
+                <div class="qa-multi" style="display:none;">
+                    <form id="qaFormBudgetBulk" onsubmit="return false;">
+                        <div class="form-group"><label>One per line: Name, Amount ($)</label><textarea name="lines" placeholder="Software, 5000&#10;Hardware, 3000&#10;Marketing, 2000&#10;Misc" rows="5"></textarea></div>
+                        <button type="submit" class="qa-btn">Add all categories</button>
+                    </form>
+                </div>
             </div>
             <!-- Expenses panel -->
             <div class="qa-panel" data-panel="expenses">
-                <form id="qaFormExpenses" onsubmit="return false;">
-                    <div class="form-group"><label>Description *</label><input type="text" name="description" placeholder="e.g. AWS hosting" required></div>
-                    <div class="qa-grid-2">
-                        <div class="form-group"><label>Amount ($) *</label><input type="number" name="amount" step="0.01" min="0.01" placeholder="0.00" required></div>
-                        <div class="form-group"><label>Date</label><input type="date" name="date"></div>
-                    </div>
-                    <div class="form-group">
-                        <label>Category *</label>
-                        <select name="category_id" id="qaExpenseCategory" required></select>
-                    </div>
-                    <div class="form-group"><label>Paid by</label><input type="text" name="paid_by" placeholder="optional"></div>
-                    <button type="submit" class="qa-btn">Add expense</button>
-                </form>
+                <div class="qa-single">
+                    <form id="qaFormExpenses" onsubmit="return false;">
+                        <div class="form-group"><label>Description *</label><input type="text" name="description" placeholder="e.g. AWS hosting" required></div>
+                        <div class="qa-grid-2">
+                            <div class="form-group"><label>Amount ($) *</label><input type="number" name="amount" step="0.01" min="0.01" placeholder="0.00" required></div>
+                            <div class="form-group"><label>Date</label><input type="date" name="date"></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Category *</label>
+                            <select name="category_id" id="qaExpenseCategory" required></select>
+                        </div>
+                        <div class="form-group"><label>Paid by</label><input type="text" name="paid_by" placeholder="optional"></div>
+                        <button type="submit" class="qa-btn">Add expense</button>
+                    </form>
+                </div>
+                <div class="qa-multi" style="display:none;">
+                    <form id="qaFormExpensesBulk" onsubmit="return false;">
+                        <div class="form-group">
+                            <label>Default category (if not specified per line)</label>
+                            <select name="default_category_id" id="qaBulkExpenseCategory"><option value="">Select...</option></select>
+                        </div>
+                        <div class="form-group"><label>One per line: Description, Amount ($), Category name (optional)</label><textarea name="lines" placeholder="AWS Hosting, 50, Software&#10;Licenses, 200&#10;Laptop, 1500, Hardware" rows="5"></textarea></div>
+                        <button type="submit" class="qa-btn">Add all expenses</button>
+                    </form>
+                </div>
+            </div>
+            <!-- Contributions panel -->
+            <div class="qa-panel" data-panel="contributions">
+                <div class="qa-single">
+                    <form id="qaFormContributions" onsubmit="return false;">
+                        <div class="form-group">
+                            <label>Member *</label>
+                            <select name="member_id" id="qaContribMember" required><option value="">Select...</option></select>
+                        </div>
+                        <div class="qa-grid-2">
+                            <div class="form-group"><label>Hours *</label><input type="number" name="hours" step="0.5" min="0.5" placeholder="e.g. 3.5" required></div>
+                            <div class="form-group"><label>Date</label><input type="date" name="date"></div>
+                        </div>
+                        <div class="form-group"><label>Description</label><input type="text" name="description" placeholder="e.g. API development"></div>
+                        <button type="submit" class="qa-btn">Log hours</button>
+                    </form>
+                </div>
+                <div class="qa-multi" style="display:none;">
+                    <form id="qaFormContributionsBulk" onsubmit="return false;">
+                        <div class="form-group"><label>Default date (optional)</label><input type="date" name="default_date"></div>
+                        <div class="form-group"><label>One per line: Member name, Hours, Description</label><textarea name="lines" placeholder="Alice, 4, API development&#10;Bob, 3.5, Testing&#10;Carol, 2, Code review" rows="5"></textarea></div>
+                        <button type="submit" class="qa-btn">Log all hours</button>
+                    </form>
+                </div>
             </div>
             <!-- Activity log -->
             <div class="qa-log" id="qaLog"></div>
@@ -260,6 +347,7 @@
         const toggle = document.getElementById('qaToggle');
         const win = document.getElementById('qaWindow');
         const close = document.getElementById('qaClose');
+        const multiCheckbox = document.getElementById('qaMultiMode');
         const tabs = document.querySelectorAll('.qa-tab');
         const panels = document.querySelectorAll('.qa-panel');
         const log = document.getElementById('qaLog');
@@ -277,6 +365,17 @@
                 panels.forEach(p => p.classList.remove('active'));
                 tab.classList.add('active');
                 document.querySelector('[data-panel="' + tab.dataset.tab + '"]').classList.add('active');
+            });
+        });
+
+        // Multi-add mode toggle
+        multiCheckbox.addEventListener('change', () => {
+            const isMulti = multiCheckbox.checked;
+            panels.forEach(panel => {
+                const single = panel.querySelector('.qa-single');
+                const multi = panel.querySelector('.qa-multi');
+                if (single) single.style.display = isMulti ? 'none' : 'block';
+                if (multi) multi.style.display = isMulti ? 'block' : 'none';
             });
         });
 
@@ -298,20 +397,15 @@
 
         function populateDropdowns() {
             if (!optionsCache) return;
-            const ms = document.getElementById('qaTaskMilestone');
-            const as = document.getElementById('qaTaskAssignee');
-            const cat = document.getElementById('qaExpenseCategory');
-            if (ms) {
-                ms.innerHTML = '<option value="">None</option>' + optionsCache.milestones.map(m => '<option value="' + m.id + '">' + m.name + '</option>').join('');
-            }
-            if (as) {
-                as.innerHTML = '<option value="">Unassigned</option>' + optionsCache.members.map(m => '<option value="' + m.id + '">' + m.name + (m.role ? ' (' + m.role + ')' : '') + '</option>').join('');
-            }
-            if (cat) {
-                const cur = cat.value;
-                cat.innerHTML = '<option value="">Select...</option>' + optionsCache.categories.map(c => '<option value="' + c.id + '">' + c.name + ' ($' + c.allocated.toFixed(2) + ')</option>').join('');
-                if (cur) cat.value = cur;
-            }
+            const msOpts = '<option value="">None</option>' + optionsCache.milestones.map(m => '<option value="' + m.id + '">' + m.name + '</option>').join('');
+            const asOpts = '<option value="">Unassigned</option>' + optionsCache.members.map(m => '<option value="' + m.id + '">' + m.name + (m.role ? ' (' + m.role + ')' : '') + '</option>').join('');
+            const catOpts = '<option value="">Select...</option>' + optionsCache.categories.map(c => '<option value="' + c.id + '">' + c.name + ' ($' + c.allocated.toFixed(2) + ')</option>').join('');
+            const contribOpts = '<option value="">Select...</option>' + optionsCache.members.map(m => '<option value="' + m.id + '">' + m.name + (m.role ? ' (' + m.role + ')' : '') + '</option>').join('');
+
+            ['qaTaskMilestone','qaBulkTaskMilestone'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = msOpts; });
+            ['qaTaskAssignee','qaBulkTaskAssignee'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = asOpts; });
+            ['qaExpenseCategory','qaBulkExpenseCategory'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = catOpts; });
+            const cm = document.getElementById('qaContribMember'); if (cm) cm.innerHTML = contribOpts;
         }
 
         async function submitForm(url, formData) {
@@ -325,9 +419,7 @@
                 });
                 const result = await res.json();
                 addLog(result.message, !result.success);
-                if (result.success) {
-                    await loadOptions();  // refresh dropdowns
-                }
+                if (result.success) await loadOptions();
                 return result;
             } catch (e) {
                 addLog('Network error - please try again.', true);
@@ -335,41 +427,56 @@
             }
         }
 
-        // Wire up each form
-        document.getElementById('qaFormMembers').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const result = await submitForm('/api/quick/members', new FormData(form));
-            if (result.success) { form.querySelector('[name="name"]').value = ''; form.querySelector('[name="role"]').value = ''; form.querySelector('[name="email"]').value = ''; form.querySelector('[name="name"]').focus(); }
-        });
+        async function submitBulk(url, formData) {
+            const data = {};
+            formData.forEach((v, k) => { if (v) data[k] = v; });
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                addLog(result.message, !result.success);
+                if (result.success) await loadOptions();
+                return result;
+            } catch (e) {
+                addLog('Network error - please try again.', true);
+                return { success: false };
+            }
+        }
 
-        document.getElementById('qaFormMilestones').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const result = await submitForm('/api/quick/milestones', new FormData(form));
-            if (result.success) { form.querySelector('[name="name"]').value = ''; form.querySelector('[name="description"]').value = ''; form.querySelector('[name="start_date"]').value = ''; form.querySelector('[name="name"]').focus(); }
-        });
+        // ── Single-add form wiring ──
+        function wireSingle(formId, url, clearFields) {
+            document.getElementById(formId).addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const form = e.target;
+                const result = await submitForm(url, new FormData(form));
+                if (result.success) { clearFields(form); }
+            });
+        }
+        wireSingle('qaFormMembers', '/api/quick/members', f => { f.querySelector('[name="name"]').value=''; f.querySelector('[name="role"]').value=''; f.querySelector('[name="email"]').value=''; f.querySelector('[name="name"]').focus(); });
+        wireSingle('qaFormMilestones', '/api/quick/milestones', f => { f.querySelector('[name="name"]').value=''; f.querySelector('[name="description"]').value=''; f.querySelector('[name="start_date"]').value=''; f.querySelector('[name="name"]').focus(); });
+        wireSingle('qaFormTasks', '/api/quick/tasks', f => { f.querySelector('[name="title"]').value=''; f.querySelector('[name="due_date"]').value=''; f.querySelector('[name="title"]').focus(); });
+        wireSingle('qaFormBudget', '/api/quick/categories', f => { f.querySelector('[name="name"]').value=''; f.querySelector('[name="allocated"]').value=''; f.querySelector('[name="name"]').focus(); });
+        wireSingle('qaFormExpenses', '/api/quick/expenses', f => { f.querySelector('[name="description"]').value=''; f.querySelector('[name="amount"]').value=''; f.querySelector('[name="paid_by"]').value=''; f.querySelector('[name="description"]').focus(); });
+        wireSingle('qaFormContributions', '/api/quick/contributions', f => { f.querySelector('[name="hours"]').value=''; f.querySelector('[name="description"]').value=''; f.querySelector('[name="date"]').value=''; f.querySelector('[name="hours"]').focus(); });
 
-        document.getElementById('qaFormTasks').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const result = await submitForm('/api/quick/tasks', new FormData(form));
-            if (result.success) { form.querySelector('[name="title"]').value = ''; form.querySelector('[name="due_date"]').value = ''; form.querySelector('[name="title"]').focus(); }
-        });
-
-        document.getElementById('qaFormBudget').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const result = await submitForm('/api/quick/categories', new FormData(form));
-            if (result.success) { form.querySelector('[name="name"]').value = ''; form.querySelector('[name="allocated"]').value = ''; form.querySelector('[name="name"]').focus(); }
-        });
-
-        document.getElementById('qaFormExpenses').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const result = await submitForm('/api/quick/expenses', new FormData(form));
-            if (result.success) { form.querySelector('[name="description"]').value = ''; form.querySelector('[name="amount"]').value = ''; form.querySelector('[name="paid_by"]').value = ''; form.querySelector('[name="description"]').focus(); }
-        });
+        // ── Bulk multi-add form wiring ──
+        function wireBulk(formId, url, clearField) {
+            document.getElementById(formId).addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const form = e.target;
+                const result = await submitBulk(url, new FormData(form));
+                if (result.success && clearField) { form.querySelector(clearField).value = ''; form.querySelector(clearField).focus(); }
+            });
+        }
+        wireBulk('qaFormMembersBulk', '/api/quick/members/bulk', '[name="lines"]');
+        wireBulk('qaFormMilestonesBulk', '/api/quick/milestones/bulk', '[name="lines"]');
+        wireBulk('qaFormTasksBulk', '/api/quick/tasks/bulk', '[name="lines"]');
+        wireBulk('qaFormBudgetBulk', '/api/quick/categories/bulk', '[name="lines"]');
+        wireBulk('qaFormExpensesBulk', '/api/quick/expenses/bulk', '[name="lines"]');
+        wireBulk('qaFormContributionsBulk', '/api/quick/contributions/bulk', '[name="lines"]');
     })();
     </script>
 </body>
