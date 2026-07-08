@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from app import db
-from app.models import Member, Milestone, Task, BudgetCategory, Expense, Contribution, ProjectCharter, Stakeholder
+from app.models import Member, Milestone, Task, BudgetCategory, Expense, Contribution, ProjectCharter, Stakeholder, ProjectProposal
 from datetime import datetime, date, timedelta
 
 bp = Blueprint('main', __name__)
@@ -246,6 +246,126 @@ def stakeholder_delete(id, sid):
     db.session.commit()
     flash(f'Stakeholder "{name}" removed.')
     return redirect(url_for('main.charter_view', id=id) + '#stakeholders')
+
+
+# ─── Project Selection / Proposals ──────────────────────────
+
+@bp.route('/proposals')
+def proposal_list():
+    proposals = ProjectProposal.query.order_by(ProjectProposal.created_at.desc()).all()
+    # Sorted view: scored proposals by total_score desc, unscored at the end
+    scored = sorted([p for p in proposals if p.is_scored], key=lambda p: p.total_score, reverse=True)
+    unscored = [p for p in proposals if not p.is_scored]
+    return render_template('proposals.html', proposals=proposals, scored=scored, unscored=unscored)
+
+
+@bp.route('/proposals/add', methods=['POST'])
+def proposal_add():
+    title = request.form.get('title', '').strip()
+    description = request.form.get('description', '').strip()
+    source = request.form.get('source', '').strip() or None
+
+    if not title:
+        flash('Proposal title is required.')
+        return redirect(url_for('main.proposal_list'))
+    if not description:
+        flash('Proposal description is required.')
+        return redirect(url_for('main.proposal_list'))
+
+    p = ProjectProposal(title=title, description=description, source=source)
+    db.session.add(p)
+    db.session.commit()
+    flash(f'Proposal "{title}" added.')
+    return redirect(url_for('main.proposal_list') + '#proposals')
+
+
+@bp.route('/proposals/<int:id>/score', methods=['POST'])
+def proposal_score(id):
+    from app.ai_agent import score_proposal
+    p = ProjectProposal.query.get_or_404(id)
+
+    result = score_proposal(p.title, p.description)
+    p.alignment = result['alignment']
+    p.feasibility = result['feasibility']
+    p.impact = result['impact']
+    p.risk = result['risk']
+    p.cost = result['cost']
+    p.rationale = result.get('rationale', {})
+    p.recommendation = result.get('recommendation', '')
+    db.session.commit()
+    flash(f'Proposal "{p.title}" scored: {p.total_score}/5.0')
+    return redirect(url_for('main.proposal_list') + '#proposals')
+
+
+@bp.route('/proposals/score-all', methods=['POST'])
+def proposal_score_all():
+    from app.ai_agent import score_proposal
+    proposals = ProjectProposal.query.filter_by(alignment=0).all()
+    count = 0
+    for p in proposals:
+        try:
+            result = score_proposal(p.title, p.description)
+            p.alignment = result['alignment']
+            p.feasibility = result['feasibility']
+            p.impact = result['impact']
+            p.risk = result['risk']
+            p.cost = result['cost']
+            p.rationale = result.get('rationale', {})
+            p.recommendation = result.get('recommendation', '')
+            count += 1
+        except Exception:
+            continue
+    db.session.commit()
+    flash(f'{count} proposal(s) scored.')
+    return redirect(url_for('main.proposal_list') + '#proposals')
+
+
+@bp.route('/proposals/<int:id>/update-scores', methods=['POST'])
+def proposal_update_scores(id):
+    p = ProjectProposal.query.get_or_404(id)
+
+    def _safe_int(val, default=0):
+        try:
+            return max(0, min(5, int(val)))
+        except (ValueError, TypeError):
+            return default
+
+    p.alignment = _safe_int(request.form.get('alignment', 0))
+    p.feasibility = _safe_int(request.form.get('feasibility', 0))
+    p.impact = _safe_int(request.form.get('impact', 0))
+    p.risk = _safe_int(request.form.get('risk', 0))
+    p.cost = _safe_int(request.form.get('cost', 0))
+    db.session.commit()
+    flash(f'Scores updated for "{p.title}".')
+    return redirect(url_for('main.proposal_list') + '#proposals')
+
+
+@bp.route('/proposals/<int:id>/convert', methods=['POST'])
+def proposal_convert(id):
+    """Convert a proposal into a full project charter."""
+    from app.ai_agent import generate_charter_outline
+    p = ProjectProposal.query.get_or_404(id)
+
+    outline = generate_charter_outline(p.title, p.description)
+    charter = ProjectCharter(name=p.title, description=p.description)
+    charter.outline = outline
+    db.session.add(charter)
+    db.session.commit()
+
+    p.charter_id = charter.id
+    db.session.commit()
+
+    flash(f'Proposal "{p.title}" converted to a charter.')
+    return redirect(url_for('main.charter_view', id=charter.id))
+
+
+@bp.route('/proposals/<int:id>/delete', methods=['POST'])
+def proposal_delete(id):
+    p = ProjectProposal.query.get_or_404(id)
+    db.session.delete(p)
+    db.session.commit()
+    flash(f'Proposal "{p.title}" deleted.')
+    return redirect(url_for('main.proposal_list') + '#proposals')
 
 
 # ─── Members ─────────────────────────────────────────────────

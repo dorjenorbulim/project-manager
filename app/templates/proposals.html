@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+{% block title %}Project Selection{% endblock %}
+{% block content %}
+<h1>Project Selection</h1>
+<p style="color:#86868b;margin-bottom:24px;max-width:720px;">
+    Paste vague project proposals below. Each is scored on a five-criteria evaluation matrix
+    (alignment, feasibility, impact, risk, cost), ranked by weighted total, and the top proposal
+    can be converted into a full project charter with one click.
+</p>
+
+<!-- Add proposal form -->
+<div class="card add-form" id="addProposal" style="margin-bottom:24px;">
+    <h3 style="margin-top:0;">Add a proposal</h3>
+    <form method="POST" action="/proposals/add">
+        <div class="grid grid-2" style="gap:12px;">
+            <div class="form-group">
+                <label for="title">Title *</label>
+                <input type="text" id="title" name="title" required placeholder="e.g. Mobile app for field sales">
+            </div>
+            <div class="form-group">
+                <label for="source">Source (optional)</label>
+                <input type="text" id="source" name="source" placeholder="e.g. Sales team, board request">
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="description">Vague description *</label>
+            <textarea id="description" name="description" required placeholder="A short, rough description of the proposed project - it doesn't need to be polished."></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Add proposal</button>
+    </form>
+</div>
+
+{% if proposals %}
+<div id="proposals" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+    <h2 style="margin:0;">Proposals ({{ proposals|length }})</h2>
+    {% if unscored %}
+    <form method="POST" action="/proposals/score-all" style="display:inline;">
+        <button type="submit" class="btn btn-primary">Score all unscored ({{ unscored|length }})</button>
+    </form>
+    {% endif %}
+</div>
+
+{% if scored %}
+<!-- Comparison table -->
+<div class="card" style="padding:0;overflow:hidden;margin-bottom:24px;">
+    <table>
+        <tr>
+            <th>Rank</th>
+            <th>Proposal</th>
+            <th>Alignment<br><span style="font-weight:400;text-transform:none;">(25%)</span></th>
+            <th>Feasibility<br><span style="font-weight:400;text-transform:none;">(20%)</span></th>
+            <th>Impact<br><span style="font-weight:400;text-transform:none;">(25%)</span></th>
+            <th>Risk<br><span style="font-weight:400;text-transform:none;">(15%)</span></th>
+            <th>Cost<br><span style="font-weight:400;text-transform:none;">(15%)</span></th>
+            <th>Total</th>
+            <th></th>
+        </tr>
+        {% for p in scored %}
+        <tr {% if loop.index == 1 %}class="winner"{% endif %}>
+            <td>
+                <span class="rank-badge rank-{{ loop.index if loop.index <= 3 else 'other' }}">{{ loop.index }}</span>
+            </td>
+            <td>
+                <strong>{{ p.title }}</strong>
+                {% if p.source %}<div style="font-size:12px;color:#86868b;">{{ p.source }}</div>{% endif %}
+                <div style="font-size:13px;color:#86868b;max-width:280px;margin-top:2px;">{{ p.description[:120] }}{% if p.description|length > 120 %}...{% endif %}</div>
+            </td>
+            <td class="score-cell">
+                <div class="score-num">{{ p.alignment }}/5</div>
+                <div class="score-bar" style="margin-top:4px;"><div class="score-fill" style="width:{{ p.alignment * 20 }}%;background:#1565c0;"></div></div>
+            </td>
+            <td class="score-cell">
+                <div class="score-num">{{ p.feasibility }}/5</div>
+                <div class="score-bar" style="margin-top:4px;"><div class="score-fill" style="width:{{ p.feasibility * 20 }}%;background:#2e7d32;"></div></div>
+            </td>
+            <td class="score-cell">
+                <div class="score-num">{{ p.impact }}/5</div>
+                <div class="score-bar" style="margin-top:4px;"><div class="score-fill" style="width:{{ p.impact * 20 }}%;background:#ff8f00;"></div></div>
+            </td>
+            <td class="score-cell">
+                <div class="score-num">{{ p.risk }}/5</div>
+                <div class="score-bar" style="margin-top:4px;"><div class="score-fill" style="width:{{ p.risk * 20 }}%;background:#7b1fa2;"></div></div>
+            </td>
+            <td class="score-cell">
+                <div class="score-num">{{ p.cost }}/5</div>
+                <div class="score-bar" style="margin-top:4px;"><div class="score-fill" style="width:{{ p.cost * 20 }}%;background:#e65100;"></div></div>
+            </td>
+            <td class="score-cell">
+                <div class="score-num" style="font-size:20px;{% if loop.index == 1 %}color:#2e7d32;{% endif %}">{{ p.total_score }}</div>
+                {% if loop.index == 1 %}<div style="font-size:11px;color:#4caf50;font-weight:600;">TOP</div>{% endif %}
+            </td>
+            <td>
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                    <a href="#detail-{{ p.id }}" class="btn btn-sm btn-primary" onclick="toggleDetail({{ p.id }});return false;">Details</a>
+                    <form method="POST" action="/proposals/{{ p.id }}/convert" style="display:inline;" onsubmit="return confirm('Convert this proposal into a full project charter?');">
+                        <button type="submit" class="btn btn-sm" style="background:#4caf50;color:#fff;width:100%;">{% if p.charter_id %}Re-convert{% else %}To Charter{% endif %}</button>
+                    </form>
+                    <form method="POST" action="/proposals/{{ p.id }}/delete" style="display:inline;" onsubmit="return confirm('Delete this proposal?');">
+                        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                    </form>
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+<!-- Detailed cards -->
+{% for p in scored %}
+<div id="detail-{{ p.id }}" class="card" style="display:none;margin-bottom:16px;{% if loop.index == 1 %}border:2px solid #4caf50;{% endif %}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+        <div>
+            <h3 style="margin:0;">
+                <span class="rank-badge rank-{{ loop.index if loop.index <= 3 else 'other' }}">{{ loop.index }}</span>
+                {{ p.title }}
+                {% if p.charter_id %}<a href="/charters/{{ p.charter_id }}" class="badge badge-done" style="font-size:11px;text-decoration:none;">Charter exists</a>{% endif %}
+            </h3>
+            {% if p.source %}<div style="font-size:13px;color:#86868b;">Source: {{ p.source }}</div>{% endif %}
+            <p style="margin-top:8px;color:#555;">{{ p.description }}</p>
+        </div>
+        <button type="button" class="btn btn-sm" style="background:#f0f0f5;" onclick="toggleDetail({{ p.id }})">Close</button>
+    </div>
+
+    {% set r = p.rationale %}
+    <div class="grid grid-2" style="gap:16px;margin-bottom:16px;">
+        <div>
+            <strong>Alignment ({{ p.alignment }}/5)</strong>
+            <div class="score-bar" style="margin:6px 0;"><div class="score-fill" style="width:{{ p.alignment * 20 }}%;background:#1565c0;"></div></div>
+            <p style="font-size:13px;color:#555;">{{ r.get('alignment', '') if r else '' }}</p>
+        </div>
+        <div>
+            <strong>Feasibility ({{ p.feasibility }}/5)</strong>
+            <div class="score-bar" style="margin:6px 0;"><div class="score-fill" style="width:{{ p.feasibility * 20 }}%;background:#2e7d32;"></div></div>
+            <p style="font-size:13px;color:#555;">{{ r.get('feasibility', '') if r else '' }}</p>
+        </div>
+        <div>
+            <strong>Impact ({{ p.impact }}/5)</strong>
+            <div class="score-bar" style="margin:6px 0;"><div class="score-fill" style="width:{{ p.impact * 20 }}%;background:#ff8f00;"></div></div>
+            <p style="font-size:13px;color:#555;">{{ r.get('impact', '') if r else '' }}</p>
+        </div>
+        <div>
+            <strong>Risk - lower is riskier ({{ p.risk }}/5)</strong>
+            <div class="score-bar" style="margin:6px 0;"><div class="score-fill" style="width:{{ p.risk * 20 }}%;background:#7b1fa2;"></div></div>
+            <p style="font-size:13px;color:#555;">{{ r.get('risk', '') if r else '' }}</p>
+        </div>
+        <div>
+            <strong>Cost - lower is pricier ({{ p.cost }}/5)</strong>
+            <div class="score-bar" style="margin:6px 0;"><div class="score-fill" style="width:{{ p.cost * 20 }}%;background:#e65100;"></div></div>
+            <p style="font-size:13px;color:#555;">{{ r.get('cost', '') if r else '' }}</p>
+        </div>
+        <div>
+            <strong>Weighted total</strong>
+            <div style="font-size:28px;font-weight:700;color:{% if p.total_score >= 3.5 %}#2e7d32{% elif p.total_score >= 2.5 %}#ff8f00{% else %}#c62828{% endif %};">{{ p.total_score }}/5.0</div>
+        </div>
+    </div>
+
+    {% if p.recommendation %}
+    <div class="card" style="background:#fafafa;padding:12px;margin-bottom:16px;">
+        <strong>Recommendation:</strong> {{ p.recommendation }}
+    </div>
+    {% endif %}
+
+    <!-- Manual score override -->
+    <details>
+        <summary style="cursor:pointer;font-weight:600;margin-bottom:8px;">Manually adjust scores</summary>
+        <form method="POST" action="/proposals/{{ p.id }}/update-scores" style="margin-top:12px;">
+            <div class="grid grid-5" style="gap:12px;grid-template-columns:repeat(5,1fr);">
+                <div class="form-group">
+                    <label>Alignment</label>
+                    <input type="number" name="alignment" min="0" max="5" value="{{ p.alignment }}">
+                </div>
+                <div class="form-group">
+                    <label>Feasibility</label>
+                    <input type="number" name="feasibility" min="0" max="5" value="{{ p.feasibility }}">
+                </div>
+                <div class="form-group">
+                    <label>Impact</label>
+                    <input type="number" name="impact" min="0" max="5" value="{{ p.impact }}">
+                </div>
+                <div class="form-group">
+                    <label>Risk</label>
+                    <input type="number" name="risk" min="0" max="5" value="{{ p.risk }}">
+                </div>
+                <div class="form-group">
+                    <label>Cost</label>
+                    <input type="number" name="cost" min="0" max="5" value="{{ p.cost }}">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-sm btn-primary">Save manual scores</button>
+        </form>
+    </details>
+
+    <div style="display:flex;gap:8px;margin-top:16px;">
+        <form method="POST" action="/proposals/{{ p.id }}/score" style="display:inline;">
+            <button type="submit" class="btn btn-sm" style="background:#f0f0f5;">Re-score with AI</button>
+        </form>
+        <form method="POST" action="/proposals/{{ p.id }}/convert" style="display:inline;" onsubmit="return confirm('Convert this proposal into a full project charter?');">
+            <button type="submit" class="btn btn-sm" style="background:#4caf50;color:#fff;">{% if p.charter_id %}Re-convert to Charter{% else %}Convert to Charter{% endif %}</button>
+        </form>
+        <form method="POST" action="/proposals/{{ p.id }}/delete" style="display:inline;" onsubmit="return confirm('Delete this proposal?');">
+            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+        </form>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+<!-- Unscored proposals -->
+{% if unscored %}
+<h2 style="margin-top:24px;">Unscored ({{ unscored|length }})</h2>
+<div class="card" style="padding:0;overflow:hidden;">
+    <table>
+        <tr><th>Title</th><th>Description</th><th>Source</th><th></th></tr>
+        {% for p in unscored %}
+        <tr>
+            <td><strong>{{ p.title }}</strong></td>
+            <td style="color:#86868b;max-width:400px;">{{ p.description[:120] }}{% if p.description|length > 120 %}...{% endif %}</td>
+            <td>{{ p.source or '-' }}</td>
+            <td style="display:flex;gap:4px;">
+                <form method="POST" action="/proposals/{{ p.id }}/score" style="display:inline;">
+                    <button type="submit" class="btn btn-sm btn-primary">Score</button>
+                </form>
+                <form method="POST" action="/proposals/{{ p.id }}/delete" style="display:inline;" onsubmit="return confirm('Delete this proposal?');">
+                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endif %}
+{% else %}
+<div class="card" style="text-align:center;padding:48px;">
+    <p style="color:#86868b;margin-bottom:16px;">No project proposals yet.</p>
+    <p style="color:#86868b;font-size:13px;">Add vague project descriptions above. They'll be scored and ranked so you can pick the best one to pursue.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleDetail(id) {
+    const el = document.getElementById('detail-' + id);
+    if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+</script>
+{% endblock %}

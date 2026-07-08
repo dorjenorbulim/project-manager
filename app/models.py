@@ -83,6 +83,57 @@ class Stakeholder(db.Model):
         }[self.category]
 
 
+class ProjectProposal(db.Model):
+    """A vague project proposal submitted for comparative evaluation and selection."""
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    source = db.Column(db.String(120))  # who submitted it / where it came from
+
+    # Scores 1-5 across the evaluation matrix (0 = not yet scored)
+    alignment = db.Column(db.Integer, default=0)       # strategic alignment
+    feasibility = db.Column(db.Integer, default=0)     # can we actually do it
+    impact = db.Column(db.Integer, default=0)          # value / benefit
+    risk = db.Column(db.Integer, default=0)            # risk level (5 = low risk, 1 = high risk)
+    cost = db.Column(db.Integer, default=0)            # cost efficiency (5 = low cost, 1 = high cost)
+
+    # AI-generated rationale for each score
+    _rationale_json = db.Column('rationale_json', db.Text)
+    recommendation = db.Column(db.Text)  # overall recommendation text
+
+    # Optional link to a charter created from this proposal
+    charter_id = db.Column(db.Integer, db.ForeignKey('project_charter.id', ondelete='SET NULL'))
+
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    @property
+    def rationale(self):
+        if not self._rationale_json:
+            return {}
+        try:
+            return json.loads(self._rationale_json)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    @rationale.setter
+    def rationale(self, value):
+        self._rationale_json = json.dumps(value) if value else None
+
+    @property
+    def total_score(self):
+        """Weighted total: alignment 25%, feasibility 20%, impact 25%, risk 15%, cost 15%."""
+        if not any([self.alignment, self.feasibility, self.impact, self.risk, self.cost]):
+            return 0
+        weights = {'alignment': 0.25, 'feasibility': 0.20, 'impact': 0.25, 'risk': 0.15, 'cost': 0.15}
+        scores = {'alignment': self.alignment, 'feasibility': self.feasibility,
+                  'impact': self.impact, 'risk': self.risk, 'cost': self.cost}
+        return round(sum(scores[k] * weights[k] for k in weights), 2)
+
+    @property
+    def is_scored(self):
+        return any([self.alignment, self.feasibility, self.impact, self.risk, self.cost])
+
+
 class Member(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
