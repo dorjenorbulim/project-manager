@@ -112,6 +112,33 @@
         .winner { border: 2px solid #4caf50; box-shadow: 0 2px 8px rgba(76,175,80,.2); }
         .score-cell { text-align: center; }
         .score-num { font-weight: 700; font-size: 16px; }
+        /* Quick-Add Assistant */
+        .qa-toggle { position: fixed; bottom: 24px; right: 24px; width: 56px; height: 56px; border-radius: 50%; background: #007aff; color: #fff; border: none; cursor: pointer; font-size: 24px; box-shadow: 0 4px 12px rgba(0,122,255,.4); display: flex; align-items: center; justify-content: center; z-index: 1000; transition: transform .2s; }
+        .qa-toggle:hover { transform: scale(1.1); }
+        .qa-window { position: fixed; bottom: 92px; right: 24px; width: 380px; max-height: 560px; background: #fff; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,.15); display: none; flex-direction: column; z-index: 1000; overflow: hidden; }
+        .qa-window.open { display: flex; }
+        .qa-header { background: #1d1d1f; color: #fff; padding: 14px 18px; font-weight: 600; font-size: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .qa-header button { background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; opacity: .7; }
+        .qa-header button:hover { opacity: 1; }
+        .qa-tabs { display: flex; border-bottom: 1px solid #e5e5ea; overflow-x: auto; }
+        .qa-tab { padding: 10px 14px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; background: none; color: #86868b; white-space: nowrap; border-bottom: 2px solid transparent; transition: all .2s; }
+        .qa-tab:hover { color: #1d1d1f; }
+        .qa-tab.active { color: #007aff; border-bottom-color: #007aff; }
+        .qa-body { flex: 1; overflow-y: auto; padding: 16px; }
+        .qa-panel { display: none; }
+        .qa-panel.active { display: block; }
+        .qa-panel .form-group { margin-bottom: 10px; }
+        .qa-panel .form-group label { font-size: 12px; font-weight: 500; margin-bottom: 3px; color: #555; }
+        .qa-panel .form-group input, .qa-panel .form-group select, .qa-panel .form-group textarea { width: 100%; padding: 7px 10px; border: 1px solid #d2d2d7; border-radius: 6px; font-size: 13px; }
+        .qa-panel .form-group textarea { resize: vertical; min-height: 40px; }
+        .qa-btn { width: 100%; padding: 10px; border-radius: 8px; border: none; background: #007aff; color: #fff; font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 4px; }
+        .qa-btn:hover { background: #0056cc; }
+        .qa-btn:disabled { background: #c0c0c0; cursor: not-allowed; }
+        .qa-log { margin-top: 12px; max-height: 120px; overflow-y: auto; }
+        .qa-log-item { font-size: 12px; padding: 6px 10px; border-radius: 6px; margin-bottom: 4px; background: #e8f5e9; color: #2e7d32; }
+        .qa-log-item.error { background: #ffebee; color: #c62828; }
+        .qa-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .qa-count { font-size: 11px; color: #86868b; margin-left: 4px; }
     </style>
 </head>
 <body {% block body_attrs %}{% endblock %}>
@@ -138,5 +165,212 @@
     </div>
 
     {% block scripts %}{% endblock %}
+
+    <!-- Quick-Add Assistant -->
+    <button class="qa-toggle" id="qaToggle" title="Quick Add">&#43;</button>
+    <div class="qa-window" id="qaWindow">
+        <div class="qa-header">
+            <span>Quick Add</span>
+            <button id="qaClose">&times;</button>
+        </div>
+        <div class="qa-tabs">
+            <button class="qa-tab active" data-tab="members">Members</button>
+            <button class="qa-tab" data-tab="milestones">Milestones</button>
+            <button class="qa-tab" data-tab="tasks">Tasks</button>
+            <button class="qa-tab" data-tab="budget">Budget</button>
+            <button class="qa-tab" data-tab="expenses">Expenses</button>
+        </div>
+        <div class="qa-body">
+            <!-- Members panel -->
+            <div class="qa-panel active" data-panel="members">
+                <form id="qaFormMembers" onsubmit="return false;">
+                    <div class="form-group"><label>Name *</label><input type="text" name="name" placeholder="e.g. Alice Wong" required></div>
+                    <div class="qa-grid-2">
+                        <div class="form-group"><label>Role</label><input type="text" name="role" placeholder="e.g. Developer"></div>
+                        <div class="form-group"><label>Email</label><input type="email" name="email" placeholder="optional"></div>
+                    </div>
+                    <button type="submit" class="qa-btn">Add member</button>
+                </form>
+            </div>
+            <!-- Milestones panel -->
+            <div class="qa-panel" data-panel="milestones">
+                <form id="qaFormMilestones" onsubmit="return false;">
+                    <div class="form-group"><label>Name *</label><input type="text" name="name" placeholder="e.g. Sprint 1" required></div>
+                    <div class="form-group"><label>Description</label><input type="text" name="description" placeholder="optional"></div>
+                    <div class="qa-grid-2">
+                        <div class="form-group"><label>Start date</label><input type="date" name="start_date"></div>
+                        <div class="form-group"><label>Deadline *</label><input type="date" name="deadline" required></div>
+                    </div>
+                    <button type="submit" class="qa-btn">Add milestone</button>
+                </form>
+            </div>
+            <!-- Tasks panel -->
+            <div class="qa-panel" data-panel="tasks">
+                <form id="qaFormTasks" onsubmit="return false;">
+                    <div class="form-group"><label>Title *</label><input type="text" name="title" placeholder="e.g. Build API" required></div>
+                    <div class="qa-grid-2">
+                        <div class="form-group">
+                            <label>Priority</label>
+                            <select name="priority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select>
+                        </div>
+                        <div class="form-group"><label>Due date</label><input type="date" name="due_date"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>Milestone</label>
+                        <select name="milestone_id" id="qaTaskMilestone"><option value="">None</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Assignee</label>
+                        <select name="assignee_id" id="qaTaskAssignee"><option value="">Unassigned</option></select>
+                    </div>
+                    <button type="submit" class="qa-btn">Add task</button>
+                </form>
+            </div>
+            <!-- Budget categories panel -->
+            <div class="qa-panel" data-panel="budget">
+                <form id="qaFormBudget" onsubmit="return false;">
+                    <div class="form-group"><label>Category name *</label><input type="text" name="name" placeholder="e.g. Software" required></div>
+                    <div class="form-group"><label>Allocated ($)</label><input type="number" name="allocated" step="0.01" min="0" placeholder="0.00"></div>
+                    <button type="submit" class="qa-btn">Add category</button>
+                </form>
+            </div>
+            <!-- Expenses panel -->
+            <div class="qa-panel" data-panel="expenses">
+                <form id="qaFormExpenses" onsubmit="return false;">
+                    <div class="form-group"><label>Description *</label><input type="text" name="description" placeholder="e.g. AWS hosting" required></div>
+                    <div class="qa-grid-2">
+                        <div class="form-group"><label>Amount ($) *</label><input type="number" name="amount" step="0.01" min="0.01" placeholder="0.00" required></div>
+                        <div class="form-group"><label>Date</label><input type="date" name="date"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>Category *</label>
+                        <select name="category_id" id="qaExpenseCategory" required></select>
+                    </div>
+                    <div class="form-group"><label>Paid by</label><input type="text" name="paid_by" placeholder="optional"></div>
+                    <button type="submit" class="qa-btn">Add expense</button>
+                </form>
+            </div>
+            <!-- Activity log -->
+            <div class="qa-log" id="qaLog"></div>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        const toggle = document.getElementById('qaToggle');
+        const win = document.getElementById('qaWindow');
+        const close = document.getElementById('qaClose');
+        const tabs = document.querySelectorAll('.qa-tab');
+        const panels = document.querySelectorAll('.qa-panel');
+        const log = document.getElementById('qaLog');
+        let optionsCache = null;
+
+        toggle.addEventListener('click', () => {
+            win.classList.toggle('open');
+            if (win.classList.contains('open')) loadOptions();
+        });
+        close.addEventListener('click', () => win.classList.remove('open'));
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                panels.forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                document.querySelector('[data-panel="' + tab.dataset.tab + '"]').classList.add('active');
+            });
+        });
+
+        function addLog(msg, isError) {
+            const div = document.createElement('div');
+            div.className = 'qa-log-item' + (isError ? ' error' : '');
+            div.textContent = msg;
+            log.insertBefore(div, log.firstChild);
+            while (log.children.length > 8) log.removeChild(log.lastChild);
+        }
+
+        async function loadOptions() {
+            try {
+                const res = await fetch('/api/quick/options');
+                optionsCache = await res.json();
+                populateDropdowns();
+            } catch (e) { /* silent */ }
+        }
+
+        function populateDropdowns() {
+            if (!optionsCache) return;
+            const ms = document.getElementById('qaTaskMilestone');
+            const as = document.getElementById('qaTaskAssignee');
+            const cat = document.getElementById('qaExpenseCategory');
+            if (ms) {
+                ms.innerHTML = '<option value="">None</option>' + optionsCache.milestones.map(m => '<option value="' + m.id + '">' + m.name + '</option>').join('');
+            }
+            if (as) {
+                as.innerHTML = '<option value="">Unassigned</option>' + optionsCache.members.map(m => '<option value="' + m.id + '">' + m.name + (m.role ? ' (' + m.role + ')' : '') + '</option>').join('');
+            }
+            if (cat) {
+                const cur = cat.value;
+                cat.innerHTML = '<option value="">Select...</option>' + optionsCache.categories.map(c => '<option value="' + c.id + '">' + c.name + ' ($' + c.allocated.toFixed(2) + ')</option>').join('');
+                if (cur) cat.value = cur;
+            }
+        }
+
+        async function submitForm(url, formData) {
+            const data = {};
+            formData.forEach((v, k) => { if (v) data[k] = v; });
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                addLog(result.message, !result.success);
+                if (result.success) {
+                    await loadOptions();  // refresh dropdowns
+                }
+                return result;
+            } catch (e) {
+                addLog('Network error - please try again.', true);
+                return { success: false };
+            }
+        }
+
+        // Wire up each form
+        document.getElementById('qaFormMembers').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const result = await submitForm('/api/quick/members', new FormData(form));
+            if (result.success) { form.querySelector('[name="name"]').value = ''; form.querySelector('[name="role"]').value = ''; form.querySelector('[name="email"]').value = ''; form.querySelector('[name="name"]').focus(); }
+        });
+
+        document.getElementById('qaFormMilestones').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const result = await submitForm('/api/quick/milestones', new FormData(form));
+            if (result.success) { form.querySelector('[name="name"]').value = ''; form.querySelector('[name="description"]').value = ''; form.querySelector('[name="start_date"]').value = ''; form.querySelector('[name="name"]').focus(); }
+        });
+
+        document.getElementById('qaFormTasks').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const result = await submitForm('/api/quick/tasks', new FormData(form));
+            if (result.success) { form.querySelector('[name="title"]').value = ''; form.querySelector('[name="due_date"]').value = ''; form.querySelector('[name="title"]').focus(); }
+        });
+
+        document.getElementById('qaFormBudget').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const result = await submitForm('/api/quick/categories', new FormData(form));
+            if (result.success) { form.querySelector('[name="name"]').value = ''; form.querySelector('[name="allocated"]').value = ''; form.querySelector('[name="name"]').focus(); }
+        });
+
+        document.getElementById('qaFormExpenses').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const result = await submitForm('/api/quick/expenses', new FormData(form));
+            if (result.success) { form.querySelector('[name="description"]').value = ''; form.querySelector('[name="amount"]').value = ''; form.querySelector('[name="paid_by"]').value = ''; form.querySelector('[name="description"]').focus(); }
+        });
+    })();
+    </script>
 </body>
 </html>

@@ -610,3 +610,139 @@ def add_contribution():
     db.session.commit()
     flash('Contribution logged.')
     return redirect(url_for('main.contributions'))
+
+
+# ─── Quick-Add Assistant API ────────────────────────────────
+# JSON endpoints for the floating bottom-right assistant widget.
+# Each returns {success, message, item} so the UI can show inline
+# confirmation without a full page reload, enabling rapid multi-add.
+
+@bp.route('/api/quick/members', methods=['POST'])
+def quick_add_member():
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'success': False, 'message': 'Name is required.'})
+    m = Member(name=name, email=(data.get('email') or '').strip(), role=(data.get('role') or '').strip())
+    db.session.add(m)
+    db.session.commit()
+    return jsonify({'success': True, 'message': f'Added member "{name}".', 'item': {'id': m.id, 'name': m.name, 'role': m.role}})
+
+
+@bp.route('/api/quick/milestones', methods=['POST'])
+def quick_add_milestone():
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'success': False, 'message': 'Name is required.'})
+    deadline_str = (data.get('deadline') or '').strip()
+    if not deadline_str:
+        return jsonify({'success': False, 'message': 'Deadline is required.'})
+    try:
+        deadline = datetime.strptime(deadline_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'success': False, 'message': 'Invalid deadline date.'})
+    start_str = (data.get('start_date') or '').strip()
+    start_date = None
+    if start_str:
+        try:
+            start_date = datetime.strptime(start_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'success': False, 'message': 'Invalid start date.'})
+    ms = Milestone(name=name, description=(data.get('description') or '').strip(), start_date=start_date, deadline=deadline)
+    db.session.add(ms)
+    db.session.commit()
+    return jsonify({'success': True, 'message': f'Added milestone "{name}" (due {deadline.strftime("%b %d, %Y")}).', 'item': {'id': ms.id, 'name': ms.name, 'deadline': deadline_str}})
+
+
+@bp.route('/api/quick/categories', methods=['POST'])
+def quick_add_category():
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'success': False, 'message': 'Category name is required.'})
+    try:
+        allocated = float(data.get('allocated', 0))
+    except (ValueError, TypeError):
+        allocated = 0
+    cat = BudgetCategory(name=name, allocated=allocated)
+    db.session.add(cat)
+    db.session.commit()
+    return jsonify({'success': True, 'message': f'Added category "{name}" (${allocated:.2f}).', 'item': {'id': cat.id, 'name': cat.name, 'allocated': allocated}})
+
+
+@bp.route('/api/quick/expenses', methods=['POST'])
+def quick_add_expense():
+    data = request.get_json(silent=True) or {}
+    description = (data.get('description') or '').strip()
+    if not description:
+        return jsonify({'success': False, 'message': 'Description is required.'})
+    try:
+        amount = float(data.get('amount', 0))
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'message': 'Invalid amount.'})
+    if amount <= 0:
+        return jsonify({'success': False, 'message': 'Amount must be greater than 0.'})
+    try:
+        category_id = int(data.get('category_id', 0))
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'message': 'Invalid category.'})
+    cat = BudgetCategory.query.get(category_id)
+    if not cat:
+        return jsonify({'success': False, 'message': 'Category not found.'})
+    paid_by = (data.get('paid_by') or '').strip()
+    date_str = (data.get('date') or '').strip()
+    exp_date = None
+    if date_str:
+        try:
+            exp_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'success': False, 'message': 'Invalid date.'})
+    if not exp_date:
+        exp_date = date.today()
+    exp = Expense(description=description, amount=amount, category_id=category_id, paid_by=paid_by, date=exp_date)
+    db.session.add(exp)
+    db.session.commit()
+    return jsonify({'success': True, 'message': f'Added expense "{description}" (${amount:.2f}).', 'item': {'id': exp.id, 'description': exp.description, 'amount': amount, 'category': cat.name}})
+
+
+@bp.route('/api/quick/tasks', methods=['POST'])
+def quick_add_task():
+    data = request.get_json(silent=True) or {}
+    title = (data.get('title') or '').strip()
+    if not title:
+        return jsonify({'success': False, 'message': 'Title is required.'})
+    priority = (data.get('priority') or 'medium').strip()
+    if priority not in ('low', 'medium', 'high'):
+        priority = 'medium'
+    due_str = (data.get('due_date') or '').strip()
+    due = None
+    if due_str:
+        try:
+            due = datetime.strptime(due_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'success': False, 'message': 'Invalid due date.'})
+    milestone_id = None
+    assignee_id = None
+    try:
+        milestone_id = int(data['milestone_id']) if data.get('milestone_id') else None
+    except (ValueError, TypeError):
+        pass
+    try:
+        assignee_id = int(data['assignee_id']) if data.get('assignee_id') else None
+    except (ValueError, TypeError):
+        pass
+    t = Task(title=title, priority=priority, due_date=due, milestone_id=milestone_id, assignee_id=assignee_id)
+    db.session.add(t)
+    db.session.commit()
+    return jsonify({'success': True, 'message': f'Added task "{title}".', 'item': {'id': t.id, 'title': t.title, 'priority': t.priority}})
+
+
+@bp.route('/api/quick/options', methods=['GET'])
+def quick_options():
+    """Return dropdown options (members, milestones, categories) for the assistant forms."""
+    return jsonify({
+        'members': [{'id': m.id, 'name': m.name, 'role': m.role} for m in Member.query.all()],
+        'milestones': [{'id': m.id, 'name': m.name} for m in Milestone.query.order_by(Milestone.deadline).all()],
+        'categories': [{'id': c.id, 'name': c.name, 'allocated': c.allocated} for c in BudgetCategory.query.all()],
+    })
