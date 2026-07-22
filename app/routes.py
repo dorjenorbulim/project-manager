@@ -42,6 +42,12 @@ def charter_list():
 def charter_new():
     from app.ai_agent import generate_charter_outline, is_ai_configured, get_ai_status
 
+    # Enforce single charter
+    existing = ProjectCharter.query.first()
+    if existing:
+        flash('A project charter already exists. Only one charter is allowed at a time. Delete it first to create a new one.')
+        return redirect(url_for('main.charter_view', id=existing.id))
+
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
         description = request.form.get('description', '').strip()

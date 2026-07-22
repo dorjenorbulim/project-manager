@@ -39,10 +39,12 @@
 <div class="card" style="margin-bottom: 24px;">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
         <div>
-            <h2 style="margin:0 0 4px;">Project Charters</h2>
-            <p style="color:#86868b;font-size:14px;">Build a charter from a name and a short description - the outline is suggested for you.</p>
+            <h2 style="margin:0 0 4px;">Project Charter</h2>
+            <p style="color:#86868b;font-size:14px;">Only one charter at a time. {% if charters %}Delete it to create a new one.{% else %}Build one from a name and short description.{% endif %}</p>
         </div>
+        {% if not charters %}
         <a href="/charters/new" class="btn btn-primary">+ New Charter</a>
+        {% endif %}
     </div>
     {% if charters %}
     <table style="margin-top:12px;">
