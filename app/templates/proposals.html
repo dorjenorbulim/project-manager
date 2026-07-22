@@ -1,12 +1,69 @@
 {% extends "base.html" %}
 {% block title %}Project Selection{% endblock %}
 {% block content %}
-<h1>Project Selection</h1>
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <h1 style="margin-bottom:0;">Project Selection</h1>
+    {% if proposals %}
+    <form method="POST" action="/proposals/reset" style="display:inline;" onsubmit="return confirm('This will permanently delete ALL proposals, scores, and the selection. This cannot be undone. Continue?');">
+        <button type="submit" class="btn btn-danger btn-sm" title="Delete all proposals and reset">&#x21bb; Reset all</button>
+    </form>
+    {% endif %}
+</div>
 <p style="color:#86868b;margin-bottom:24px;max-width:720px;">
     Paste vague project proposals below. Each is scored on a six-criteria weighted scoring model
-    (1-10 scale), ranked by weighted total, and the top proposal can be converted into a full
-    project charter with one click.
+    (1-10 scale), ranked by weighted total. Select the winning proposal to generate a conclusion,
+    then convert it into a project charter. Only one charter can exist at a time.
 </p>
+
+<!-- Selection banner -->
+{% if selected %}
+<div class="card" id="selection" style="margin-bottom:24px;border:2px solid #4caf50;box-shadow:0 2px 12px rgba(76,175,80,.15);">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
+        <div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                <span class="rank-badge rank-1">1</span>
+                <h2 style="margin:0;">Selected: {{ selected.title }}</h2>
+                <span class="badge badge-done">SELECTED</span>
+            </div>
+            <div style="font-size:24px;font-weight:700;color:#2e7d32;margin-bottom:4px;">{{ selected.weighted_total }}/10 ({{ selected.total_percentage }}%)</div>
+            {% if selected.source %}<div style="font-size:13px;color:#86868b;">Source: {{ selected.source }}</div>{% endif %}
+            <p style="margin-top:8px;color:#555;">{{ selected.description }}</p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;min-width:140px;">
+            {% if existing_charter %}
+            <a href="/charters/{{ existing_charter.id }}" class="btn btn-sm btn-primary" style="text-align:center;">View Charter</a>
+            {% else %}
+            <form method="POST" action="/proposals/{{ selected.id }}/convert" style="display:inline;" onsubmit="return confirm('Convert this proposal into the project charter? This is the only charter allowed.');">
+                <button type="submit" class="btn btn-sm" style="background:#4caf50;color:#fff;width:100%;">Convert to Charter</button>
+            </form>
+            {% endif %}
+            <form method="POST" action="/proposals/{{ selected.id }}/select" style="display:inline;">
+                <button type="submit" class="btn btn-sm" style="background:#f0f0f5;color:#1d1d1f;width:100%;">Re-generate conclusion</button>
+            </form>
+        </div>
+    </div>
+
+    {% if conclusion %}
+    <div style="margin-top:16px;padding:16px;background:#f5faf5;border-radius:8px;border-left:4px solid #4caf50;">
+        <h3 style="margin:0 0 8px 0;font-size:15px;">Selection Conclusion</h3>
+        <p style="margin:0;line-height:1.6;color:#333;">{{ conclusion }}</p>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Single charter warning -->
+{% if existing_charter and not selected %}
+<div class="card" style="margin-bottom:24px;border-left:4px solid #ff8f00;background:#fff8e1;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div>
+            <strong>A project charter already exists.</strong>
+            <span style="color:#86868b;font-size:13px;"> Only one charter is allowed. Delete it to create a new one from a different proposal.</span>
+        </div>
+        <a href="/charters/{{ existing_charter.id }}" class="btn btn-sm btn-primary">View existing charter</a>
+    </div>
+</div>
+{% endif %}
 
 <!-- Weight configuration panel -->
 <div class="card" id="weights" style="margin-bottom:24px;">
@@ -107,9 +164,23 @@
             <td>
                 <div style="display:flex;flex-direction:column;gap:4px;">
                     <a href="#detail-{{ p.id }}" class="btn btn-sm btn-primary" onclick="toggleDetail({{ p.id }});return false;">Details</a>
-                    <form method="POST" action="/proposals/{{ p.id }}/convert" style="display:inline;" onsubmit="return confirm('Convert this proposal into a full project charter?');">
-                        <button type="submit" class="btn btn-sm" style="background:#4caf50;color:#fff;width:100%;">{% if p.charter_id %}Re-convert{% else %}To Charter{% endif %}</button>
+                    {% if not existing_charter %}
+                    <form method="POST" action="/proposals/{{ p.id }}/convert" style="display:inline;" onsubmit="return confirm('Convert this proposal into the project charter? Only one charter is allowed.');">
+                        <button type="submit" class="btn btn-sm" style="background:#4caf50;color:#fff;width:100%;">To Charter</button>
                     </form>
+                    {% elif existing_charter and p.charter_id == existing_charter.id %}
+                    <a href="/charters/{{ existing_charter.id }}" class="btn btn-sm" style="background:#4caf50;color:#fff;text-align:center;text-decoration:none;">View Charter</a>
+                    {% else %}
+                    <span style="font-size:11px;color:#86868b;text-align:center;padding:4px;">Charter exists</span>
+                    {% endif %}
+                    {% if p.is_scored and (not selected or selected.id != p.id) %}
+                    <form method="POST" action="/proposals/{{ p.id }}/select" style="display:inline;">
+                        <button type="submit" class="btn btn-sm" style="background:#f0f0f5;color:#1565c0;width:100%;">Select</button>
+                    </form>
+                    {% endif %}
+                    {% if selected and selected.id == p.id %}
+                    <span class="badge badge-done" style="text-align:center;">SELECTED</span>
+                    {% endif %}
                     <form method="POST" action="/proposals/{{ p.id }}/delete" style="display:inline;" onsubmit="return confirm('Delete this proposal?');">
                         <button type="submit" class="btn btn-danger btn-sm">Delete</button>
                     </form>
@@ -199,13 +270,24 @@
         </form>
     </details>
 
-    <div style="display:flex;gap:8px;margin-top:16px;">
+    <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
         <form method="POST" action="/proposals/{{ p.id }}/score" style="display:inline;">
             <button type="submit" class="btn btn-sm" style="background:#f0f0f5;">Re-score</button>
         </form>
-        <form method="POST" action="/proposals/{{ p.id }}/convert" style="display:inline;" onsubmit="return confirm('Convert this proposal into a full project charter?');">
-            <button type="submit" class="btn btn-sm" style="background:#4caf50;color:#fff;">{% if p.charter_id %}Re-convert to Charter{% else %}Convert to Charter{% endif %}</button>
+        {% if p.is_scored and (not selected or selected.id != p.id) %}
+        <form method="POST" action="/proposals/{{ p.id }}/select" style="display:inline;">
+            <button type="submit" class="btn btn-sm" style="background:#1565c0;color:#fff;">Select as winner</button>
         </form>
+        {% endif %}
+        {% if not existing_charter %}
+        <form method="POST" action="/proposals/{{ p.id }}/convert" style="display:inline;" onsubmit="return confirm('Convert this proposal into the project charter? Only one charter is allowed.');">
+            <button type="submit" class="btn btn-sm" style="background:#4caf50;color:#fff;">Convert to Charter</button>
+        </form>
+        {% elif existing_charter and p.charter_id == existing_charter.id %}
+        <a href="/charters/{{ existing_charter.id }}" class="btn btn-sm" style="background:#4caf50;color:#fff;text-decoration:none;">View Charter</a>
+        {% else %}
+        <span style="font-size:12px;color:#86868b;padding:6px 10px;">A charter already exists - delete it first</span>
+        {% endif %}
         <form method="POST" action="/proposals/{{ p.id }}/delete" style="display:inline;" onsubmit="return confirm('Delete this proposal?');">
             <button type="submit" class="btn btn-danger btn-sm">Delete</button>
         </form>

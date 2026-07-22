@@ -257,10 +257,19 @@ def proposal_list():
     scored = sorted([p for p in proposals if p.is_scored], key=lambda p: p.weighted_total, reverse=True)
     unscored = [p for p in proposals if not p.is_scored]
     weights = ProjectProposal.get_weights()
+    cfg = ScoringConfig.get_or_create()
+    selected = None
+    conclusion = None
+    if cfg and cfg.selected_proposal_id:
+        selected = ProjectProposal.query.get(cfg.selected_proposal_id)
+        conclusion = cfg.selection_conclusion or ''
+    existing_charter = ProjectCharter.query.first()
     return render_template('proposals.html', proposals=proposals, scored=scored,
                            unscored=unscored, weights=weights,
                            criteria=ProjectProposal.CRITERIA,
-                           criteria_labels=ProjectProposal.CRITERIA_LABELS)
+                           criteria_labels=ProjectProposal.CRITERIA_LABELS,
+                           selected=selected, conclusion=conclusion,
+                           existing_charter=existing_charter)
 
 
 @bp.route('/proposals/add', methods=['POST'])
@@ -374,9 +383,17 @@ def proposal_update_scores(id):
 
 @bp.route('/proposals/<int:id>/convert', methods=['POST'])
 def proposal_convert(id):
-    """Convert a proposal into a full project charter."""
+    """Convert a proposal into a full project charter.
+    Only one charter can exist at a time - if one already exists it must be
+    deleted first (the UI enforces this)."""
     from app.ai_agent import generate_charter_outline
     p = ProjectProposal.query.get_or_404(id)
+
+    # Enforce single charter
+    existing = ProjectCharter.query.first()
+    if existing:
+        flash('A project charter already exists. Delete it first before creating a new one.')
+        return redirect(url_for('main.charter_view', id=existing.id))
 
     outline = generate_charter_outline(p.title, p.description)
     charter = ProjectCharter(name=p.title, description=p.description)
@@ -389,6 +406,42 @@ def proposal_convert(id):
 
     flash(f'Proposal "{p.title}" converted to a charter.')
     return redirect(url_for('main.charter_view', id=charter.id))
+
+
+@bp.route('/proposals/<int:id>/select', methods=['POST'])
+def proposal_select(id):
+    """Select the winning proposal and generate a conclusion."""
+    from app.ai_agent import generate_selection_conclusion
+
+    p = ProjectProposal.query.get_or_404(id)
+    if not p.is_scored:
+        flash('Score this proposal first before selecting it.')
+        return redirect(url_for('main.proposal_list') + '#proposals')
+
+    all_proposals = ProjectProposal.query.all()
+    conclusion = generate_selection_conclusion(p, all_proposals)
+
+    cfg = ScoringConfig.get_or_create()
+    cfg.selected_proposal_id = p.id
+    cfg.selection_conclusion = conclusion
+    db.session.commit()
+
+    flash(f'Selected "{p.title}" as the winning proposal. Conclusion generated.')
+    return redirect(url_for('main.proposal_list') + '#selection')
+
+
+@bp.route('/proposals/reset', methods=['POST'])
+def proposal_reset():
+    """Clear ALL proposals, scores, selection, and reset weights to defaults.
+    This does NOT delete existing project charters."""
+    ProjectProposal.query.delete()
+    cfg = ScoringConfig.get_or_create()
+    cfg.selected_proposal_id = None
+    cfg.selection_conclusion = None
+    cfg.weights_json = json.dumps(ProjectProposal.DEFAULT_WEIGHTS)
+    db.session.commit()
+    flash('All proposals cleared. Weights reset to defaults.')
+    return redirect(url_for('main.proposal_list'))
 
 
 @bp.route('/proposals/<int:id>/delete', methods=['POST'])

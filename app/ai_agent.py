@@ -570,3 +570,106 @@ def score_proposal(title, description):
         except Exception as e:
             logger.warning("AI proposal scoring failed (%s); falling back to heuristic.", e)
     return _template_score_proposal(title, description)
+
+
+# ─── Selection conclusion ─────────────────────────────────────────────────
+
+SELECTION_SYSTEM_PROMPT = """You are a senior project portfolio manager writing a selection conclusion.
+
+Given the winning proposal and its scores (plus a ranked list of all proposals for context), write a clear, concise conclusion (3-5 sentences) explaining WHY this project should be picked. Reference specific score strengths (e.g. high feasibility, strong strategic fit, manageable risk) and explain why it won over the alternatives. Be specific and practical - this is a decision document, not marketing copy.
+
+Output plain text only (no markdown, no JSON, no headers)."""
+
+
+def _template_conclusion(winner, all_proposals):
+    """Deterministic conclusion when no AI key is configured."""
+    scores = winner.scores_dict
+    weights = winner.get_weights()
+    breakdown = winner.weighted_breakdown
+
+    # Find top 3 strengths
+    strengths = sorted(breakdown, key=lambda x: x['contribution'], reverse=True)[:3]
+    strength_text = ', '.join(f"{s['label']} ({s['score']}/10, {s['weight_pct']}% weight)" for s in strengths)
+
+    # Compare to runner-up
+    others = [p for p in all_proposals if p.id != winner.id and p.is_scored]
+    comparison = ''
+    if others:
+        runner = max(others, key=lambda p: p.weighted_total)
+        diff = winner.weighted_total - runner.weighted_total
+        comparison = f" It outscored the next-best proposal \"{runner.title}\" by {diff} points on the weighted scale."
+
+    return (f'"{winner.title}" is the recommended project with a weighted score of {winner.weighted_total}/10 '
+            f'({winner.total_percentage}%). Its key strengths are {strength_text}.{comparison} '
+            f'The project scores {scores["feasibility"]}/10 on feasibility, meaning it is '
+            f'{"highly deliverable" if scores["feasibility"] >= 7 else "achievable with some effort" if scores["feasibility"] >= 5 else "challenging but worth pursuing"}, '
+            f'with a risk level of {scores["risk_level"]}/10 '
+            f'({"low risk" if scores["risk_level"] >= 7 else "moderate risk" if scores["risk_level"] >= 5 else "elevated risk that needs mitigation"}). '
+            f'This proposal offers the best balance of strategic alignment, deliverability, and value relative to the alternatives.')
+
+
+def _ai_conclusion(winner, all_proposals):
+    """Call the configured LLM for a selection conclusion."""
+    # Build context
+    weights = winner.get_weights()
+    winner_brief = (
+        f"WINNING PROPOSAL:\n"
+        f"  Title: {winner.title}\n"
+        f"  Description: {winner.description}\n"
+        f"  Weighted score: {winner.weighted_total}/10 ({winner.total_percentage}%)\n"
+        f"  Scores: Strategic Fit={winner.strategic_fit}/10, Feasibility={winner.feasibility}/10, "
+        f"Business Value={winner.business_value}/10, Risk Level={winner.risk_level}/10, "
+        f"Cost Efficiency={winner.cost_efficiency}/10, Urgency={winner.urgency}/10\n"
+        f"  Weights: Strategic Fit={weights['strategic_fit']*100:.0f}%, Feasibility={weights['feasibility']*100:.0f}%, "
+        f"Business Value={weights['business_value']*100:.0f}%, Risk={weights['risk_level']*100:.0f}%, "
+        f"Cost={weights['cost_efficiency']*100:.0f}%, Urgency={weights['urgency']*100:.0f}%\n"
+    )
+
+    others = [p for p in all_proposals if p.id != winner.id and p.is_scored]
+    others_brief = "OTHER PROPOSALS (for comparison):\n"
+    for p in sorted(others, key=lambda p: p.weighted_total, reverse=True):
+        others_brief += f"  - {p.title}: {p.weighted_total}/10 ({p.total_percentage}%) - Feasibility={p.feasibility}/10\n"
+
+    user_brief = winner_brief + "\n" + others_brief
+
+    client = OpenAI(api_key=AI_API_KEY, base_url=AI_BASE_URL)
+    messages = [
+        {"role": "system", "content": SELECTION_SYSTEM_PROMPT},
+        {"role": "user", "content": user_brief},
+    ]
+
+    reply = ''
+    try:
+        extra_headers = {}
+        if 'openrouter' in AI_BASE_URL:
+            extra_headers = {
+                'HTTP-Referer': 'https://project-manager-vqcr.onrender.com',
+                'X-Title': 'Project Manager',
+            }
+        response = client.chat.completions.create(
+            model=AI_MODEL,
+            messages=messages,
+            max_tokens=400,
+            temperature=0.5,
+            extra_headers=extra_headers or None,
+            timeout=AI_TIMEOUT,
+        )
+        reply = response.choices[0].message.content or ''
+    except Exception as e:
+        logger.warning("AI conclusion generation failed: %s", e)
+        raise RuntimeError("AI timed out or failed")
+
+    if not reply.strip():
+        raise RuntimeError("AI returned no response")
+
+    return reply.strip()
+
+
+def generate_selection_conclusion(winner, all_proposals):
+    """Generate a conclusion for why the winning proposal was selected."""
+    if is_ai_configured():
+        try:
+            return _ai_conclusion(winner, all_proposals)
+        except Exception as e:
+            logger.warning("AI conclusion failed (%s); falling back to template.", e)
+    return _template_conclusion(winner, all_proposals)

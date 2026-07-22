@@ -222,9 +222,11 @@ class ProjectProposal(db.Model):
 
 
 class ScoringConfig(db.Model):
-    """Singleton config for the weighted scoring model weights."""
+    """Singleton config for the weighted scoring model weights + selection state."""
     id = db.Column(db.Integer, primary_key=True)
     weights_json = db.Column(db.Text)
+    selected_proposal_id = db.Column(db.Integer, db.ForeignKey('project_proposal.id', ondelete='SET NULL'))
+    selection_conclusion = db.Column(db.Text)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     @staticmethod
